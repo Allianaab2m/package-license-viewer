@@ -16,8 +16,24 @@ const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(
 const { parseJsrPackageName, parseJsrNpmCompatName } = require(
   path.join(OUT, "providers/jsr/client.js")
 );
-const { formatAnnotation } = require(path.join(OUT, "format.js"));
+const { formatAnnotation, buildHover } = require(path.join(OUT, "format.js"));
 const lock = require(path.join(OUT, "providers/npm/lockfile/parsers.js"));
+const { LicenseCache } = require(path.join(OUT, "cache.js"));
+const { NpmLicenseProvider } = require(path.join(OUT, "providers/npm/index.js"));
+
+const noCancel = {
+  isCancellationRequested: false,
+  onCancellationRequested: () => ({ dispose() {} }),
+};
+const memoryMemento = () => ({
+  store: {},
+  get(key) {
+    return this.store[key];
+  },
+  async update(key, value) {
+    this.store[key] = value;
+  },
+});
 
 const FIXTURES = path.join(__dirname, "fixtures", "lockfiles");
 const readFixture = (name) => fs.readFileSync(path.join(FIXTURES, name), "utf8");
@@ -80,6 +96,35 @@ test("parseSpec follows npm: aliases to their target", () => {
   );
   // No version means latest
   assert.equal(parseSpec("x", "npm:lodash").spec, "latest");
+});
+
+// pnpm >=10.9 and Yarn >=4.9 write these two shapes for JSR packages — verified by actually
+// running `pnpm add jsr:@luca/cases` and `pnpm add cases-alias@jsr:@luca/cases`.
+test("parseSpec recognises the jsr: specifier pnpm/Yarn write", () => {
+  // bare form: the package.json key is itself the JSR name — "@luca/cases": "jsr:^1.0.0"
+  assert.deepEqual(
+    { ...parseSpec("@luca/cases", "jsr:^1.0.0") },
+    { kind: "jsr", name: "@luca/cases", spec: "^1.0.0" }
+  );
+  // aliased form: the JSR name lives in the value — "cases-alias": "jsr:@luca/cases@^1.0.0"
+  assert.deepEqual(
+    { ...parseSpec("cases-alias", "jsr:@luca/cases@^1.0.0") },
+    { kind: "jsr", name: "@luca/cases", spec: "^1.0.0" }
+  );
+  // No version means latest, for both forms
+  assert.equal(parseSpec("@luca/cases", "jsr:").spec, "latest");
+  assert.equal(parseSpec("x", "jsr:@luca/cases").spec, "latest");
+});
+
+test("resolve() skips a jsr: specifier whose name is not scoped, rather than sending it to npmjs.org", async () => {
+  const provider = new NpmLicenseProvider(new LicenseCache(memoryMemento()));
+  const document = fakeDocument("{}", "d:/project/package.json");
+  const info = await provider.resolve(
+    { name: "not-scoped", spec: "jsr:^1.0.0", section: "dependencies", line: 0 },
+    document,
+    noCancel
+  );
+  assert.equal(info.source, "skipped");
 });
 
 test("encodePackageName encodes the scope separator", () => {
@@ -382,4 +427,93 @@ test("formatAnnotation stays silent when there is nothing useful to say", () => 
     formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "unknown" }),
     "?"
   );
+});
+
+// --- hover ---------------------------------------------------------------
+// "name@1.2.3" is a syntactically valid GFM extended email autolink — numeric domain
+// labels are allowed, so "4.17.21" parses as a domain — and VS Code's hover renderer (marked)
+// turns it into a mailto: link unless it is wrapped in a code span. Verified against `marked`
+// directly: rendering "lodash@4.17.21" produces `<a href="mailto:...">`, and wrapping it in
+// backticks is what suppresses that.
+
+test("buildHover wraps name@version in a code span so it cannot be linkified as an email", () => {
+  const hover = buildHover(ENTRY, { license: "MIT", version: "4.17.21", source: "local" });
+  assert.match(hover.value, /`lodash@4\.17\.21`/);
+  // Guard against a regression that keeps the backticks but still leaves the bare form nearby
+  assert.doesNotMatch(hover.value.replace(/`lodash@4\.17\.21`/, ""), /lodash@4\.17\.21/);
+});
+
+test("buildHover falls back to just the name when no version resolved", () => {
+  const hover = buildHover(ENTRY, { source: "unknown", detail: "not found" });
+  assert.match(hover.value, /`lodash`/);
+  assert.doesNotMatch(hover.value, /@/);
+});
+
+test("buildHover links the title to npmjs.org when registryPackageName is set", () => {
+  const hover = buildHover(ENTRY, {
+    license: "MIT",
+    version: "4.17.21",
+    source: "local",
+    registryPackageName: "lodash",
+  });
+  assert.match(
+    hover.value,
+    /\*\*\[`lodash@4\.17\.21`\]\(https:\/\/www\.npmjs\.com\/package\/lodash\/v\/4\.17\.21\)\*\*/
+  );
+});
+
+test("buildHover links to the alias target, not the local package.json key", () => {
+  // "lodash4": "npm:lodash@^4.0.0" — the hover title still reads "lodash4@4.17.21" (the
+  // name the user actually wrote), but the link must point at the real npm package.
+  const hover = buildHover(
+    { name: "lodash4", spec: "npm:lodash@^4.0.0", section: "dependencies", line: 0 },
+    { license: "MIT", version: "4.17.21", source: "registry", registryPackageName: "lodash" }
+  );
+  assert.match(hover.value, /`lodash4@4\.17\.21`/);
+  assert.match(hover.value, /\]\(https:\/\/www\.npmjs\.com\/package\/lodash\/v\/4\.17\.21\)/);
+});
+
+test("buildHover links the title to jsr.io for JSR packages, never to npmjs.org", () => {
+  // JSR packages are never published to npmjs.org under their JSR or npm-compatibility name,
+  // so registryPackageName is never set for them; JsrClient supplies packagePageUrl instead.
+  const jsrUrl = "https://jsr.io/@std/fs@1.0.24";
+  const hover = buildHover(
+    { name: "@std/fs", spec: "jsr:@std/fs@^1.0.0", section: "dependencies", line: 0 },
+    {
+      license: "MIT",
+      version: "1.0.24",
+      source: "registry",
+      via: "jsr.io",
+      homepage: jsrUrl,
+      packagePageUrl: jsrUrl,
+    }
+  );
+  assert.doesNotMatch(hover.value, /npmjs\.com/);
+  assert.match(
+    hover.value,
+    /\*\*\[`@std\/fs@1\.0\.24`\]\(https:\/\/jsr\.io\/@std\/fs@1\.0\.24\)\*\*/
+  );
+  // The title link and the Homepage line would otherwise point at the exact same URL, so the
+  // redundant Homepage line is dropped.
+  assert.equal((hover.value.match(/\[Homepage\]/g) ?? []).length, 0);
+});
+
+test("buildHover still shows a separate Homepage line when it differs from the title link", () => {
+  const hover = buildHover(ENTRY, {
+    license: "MIT",
+    version: "4.17.21",
+    source: "local",
+    registryPackageName: "lodash",
+    homepage: "https://lodash.com/",
+  });
+  assert.match(hover.value, /\[Homepage\]\(https:\/\/lodash\.com\/\)/);
+});
+
+test("buildHover leaves the title unlinked without a resolved version", () => {
+  const hover = buildHover(ENTRY, {
+    source: "unknown",
+    detail: "no published version matches",
+    registryPackageName: "lodash",
+  });
+  assert.doesNotMatch(hover.value, /npmjs\.com/);
 });

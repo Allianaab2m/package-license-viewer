@@ -74,8 +74,13 @@ export async function resolveViaNpmRegistry(
   token: vscode.CancellationToken
 ): Promise<LicenseInfo> {
   const parsed = parseSpec(name, spec);
-  if (parsed.kind === "unresolvable") {
-    return { source: "skipped", detail: parsed.reason };
+  // This helper only talks to npmjs.org, so a `jsr:` specifier (which parseSpec also
+  // recognises, for the package.json provider's benefit) has no business reaching it.
+  if (parsed.kind !== "range" && parsed.kind !== "tag") {
+    return {
+      source: "skipped",
+      detail: parsed.kind === "unresolvable" ? parsed.reason : "not an npm registry specifier",
+    };
   }
 
   try {
@@ -89,6 +94,7 @@ export async function resolveViaNpmRegistry(
       version,
       source: "registry",
       homepage,
+      registryPackageName: parsed.name,
       detail: license ? undefined : "the published package declares no license",
     };
   } catch (error) {

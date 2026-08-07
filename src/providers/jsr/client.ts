@@ -58,25 +58,37 @@ export class JsrClient {
     return getSetting("jsr.apiUrl", "https://api.jsr.io").replace(/\/+$/, "");
   }
 
+  /**
+   * The JSR page for one exact version, e.g. `https://jsr.io/@std/fs@1.0.24`. Public so the
+   * npm provider can link to it too, for a JSR package it already found installed locally
+   * (where it only needs `fetchLicense`, not a full `resolve`).
+   */
+  packageUrl(id: JsrPackageId, version: string): string {
+    return `${this.registryUrl}/@${id.scope}/${id.name}@${version}`;
+  }
+
   /** Resolve one JSR package */
   async resolve(
     id: JsrPackageId,
     spec: string,
     token: vscode.CancellationToken
   ): Promise<LicenseInfo> {
-    const label = `@${id.scope}/${id.name}`;
     try {
       const version = await this.resolveVersion(id, spec, token);
       if (!version) {
         return { source: "unknown", detail: `no published version matches "${spec}"` };
       }
       const license = await this.fetchLicense(id, version, token);
+      const packagePage = this.packageUrl(id, version);
       return {
         license: license ?? undefined,
         version,
         source: "registry",
         via: "jsr.io",
-        homepage: `${this.registryUrl}/${label}@${version}`,
+        // JSR's API doesn't expose a separately declared homepage, so the package's own JSR
+        // page doubles as both — it's also what the hover title links to.
+        homepage: packagePage,
+        packagePageUrl: packagePage,
         detail: license ? undefined : "the package declares no license on JSR",
       };
     } catch (error) {
@@ -133,7 +145,16 @@ export class JsrClient {
     return version;
   }
 
-  private async fetchLicense(
+  /**
+   * Read the license of one exact, already-known version.
+   *
+   * Public because the npm provider needs it too: a package installed through the `@jsr`
+   * npm-compatibility registry never carries a `license` field in its local package.json (this
+   * is a gap in JSR's npm-compat layer, confirmed on both an unlicensed and a licensed
+   * package), so once it has the version from node_modules it still has to ask jsr.io for the
+   * license.
+   */
+  async fetchLicense(
     id: JsrPackageId,
     version: string,
     token: vscode.CancellationToken

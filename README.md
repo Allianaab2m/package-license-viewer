@@ -46,8 +46,16 @@ the package homepage.
 
 Specifiers that cannot be resolved — `file:`, `link:`, `workspace:`, `git+…`, `user/repo`,
 tarball URLs, `https://` imports — are left un-annotated rather than marked unknown.
-`npm:` aliases are followed to their target, and `@jsr/scope__name` (the npm-compatibility name
-for a JSR package) is routed to JSR automatically.
+`npm:` aliases are followed to their target. JSR packages inside `package.json` are recognized
+either way they show up — the npm-compatibility alias `@jsr/scope__name`, or the native
+`jsr:<range>` / `jsr:@scope/name@<range>` specifier pnpm ≥10.9 and Yarn ≥4.9 write directly —
+and routed to JSR automatically, since the npm-compatibility registry never publishes a license
+for them, installed or not.
+
+The hover title links to the npmjs.org package page for dependencies that really are npm
+registry packages (following an `npm:` alias to its actual target), and to the matching JSR
+page for JSR packages — never to npmjs.org for those, since they aren't published there under
+their JSR or npm-compatibility name.
 
 ### Package managers
 
@@ -117,8 +125,10 @@ version pinned in the lockfile.
 
 npm and JSR are covered today. Python (PyPI), Rust (crates.io) and Go are planned — the
 extension is built around a provider interface specifically so an ecosystem is one class away,
-without touching rendering, caching or scheduling. See [CONTRIBUTING.md](CONTRIBUTING.md) if
-you'd like to add one, or just want to see how it's structured.
+without touching rendering, caching or scheduling. Every ecosystem is expected to link the
+hover title to its own registry page too, the same way npm and JSR already do. See
+[CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to add one, or just want to see how it's
+structured.
 
 ## Author
 

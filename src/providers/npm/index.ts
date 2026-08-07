@@ -3,7 +3,12 @@ import semver from "semver";
 import type { LicenseCache } from "../../cache";
 import { getSetting } from "../../config";
 import { log } from "../../log";
-import { JsrClient, parseJsrNpmCompatName, resolveViaNpmRegistry } from "../jsr";
+import {
+  JsrClient,
+  parseJsrNpmCompatName,
+  parseJsrPackageName,
+  resolveViaNpmRegistry,
+} from "../jsr";
 import type { DependencyEntry, LicenseInfo, LicenseProvider } from "../types";
 import { InstalledPackageLookup } from "./installed";
 import { LockfileResolver } from "./lockfile";
@@ -27,6 +32,11 @@ const DEFAULT_SECTIONS = [
  *  2. the lockfile — the pinned version even under PnP or before installing. npm's lockfile
  *     carries the license too.
  *  3. the registry — resolve the specifier's range as a last resort.
+ *
+ * JSR packages are a cross-cutting exception to that: whether they show up as the npm
+ * compatibility alias `@jsr/scope__name` or as a native `jsr:<range>` specifier (pnpm >=10.9,
+ * Yarn >=4.9), the license always has to come from jsr.io — the npm-compatibility layer's
+ * package.json never carries a `license` field, installed or not.
  */
 export class NpmLicenseProvider implements LicenseProvider {
   readonly id = "npm";
@@ -74,6 +84,16 @@ export class NpmLicenseProvider implements LicenseProvider {
   ): Promise<LicenseInfo> {
     const parsed = parseSpec(entry.name, entry.spec);
 
+    // JSR-flavored dependencies show up two ways in a package.json:
+    //  - the npm-compatibility alias name npm, yarn classic and bun get when installed through
+    //    the `@jsr` scoped registry: `"@jsr/scope__name": "^1.0.0"`
+    //  - the native specifier pnpm >=10.9 and Yarn >=4.9 write directly:
+    //    `"@scope/name": "jsr:^1.0.0"` or `"alias": "jsr:@scope/name@^1.0.0"`
+    // Either way jsr.io has to be asked, not npmjs.org — it has never heard of these packages.
+    const jsrId =
+      parseJsrNpmCompatName(parsed.name) ??
+      (parsed.kind === "jsr" ? parseJsrPackageName(parsed.name) : undefined);
+
     // 1. Whatever is installed wins
     const local = await this.installed.find(document.uri, entry.name);
     if (local) {
@@ -84,20 +104,53 @@ export class NpmLicenseProvider implements LicenseProvider {
         semver.satisfies(version, parsed.spec, { loose: true, includePrerelease: true });
       if (satisfies) {
         const license = normalizeLicense(local.manifest);
+        // Only a genuine, alias-resolved semver specifier is guaranteed to name a real
+        // npmjs.org package — not a JSR package (jsrId), and not a file:/workspace:/git
+        // dependency that merely happens to be linked locally.
+        const registryPackageName =
+          !jsrId && (parsed.kind === "range" || parsed.kind === "tag") ? parsed.name : undefined;
+        if (license) {
+          return {
+            license,
+            version,
+            source: "local",
+            homepage: local.manifest.homepage,
+            registryPackageName,
+          };
+        }
+        if (jsrId && version) {
+          // The package.json inside node_modules never carries a license field for a JSR
+          // package (true even for packages that do declare one on JSR), so ask jsr.io for
+          // the license of the exact version that is already on disk.
+          const jsrLicense = await this.jsr.fetchLicense(jsrId, version, token);
+          const packagePage = this.jsr.packageUrl(jsrId, version);
+          return {
+            license: jsrLicense,
+            version,
+            source: "local",
+            via: "node_modules + jsr.io",
+            // Prefer the JSR page over whatever homepage node_modules happened to record —
+            // consistent with what a full JSR resolution returns, and it's what the hover
+            // title links to.
+            homepage: packagePage,
+            packagePageUrl: packagePage,
+            detail: jsrLicense ? undefined : "the package declares no license on JSR",
+          };
+        }
         return {
-          license,
           version,
           source: "local",
           homepage: local.manifest.homepage,
-          detail: license ? undefined : "no license field in the installed package.json",
+          registryPackageName,
+          detail: "no license field in the installed package.json",
         };
       }
       log.debug(`npm: installed ${entry.name}@${version} does not satisfy ${entry.spec}`);
     }
 
-    // JSR packages appear under their npm-compatibility name (`@jsr/std__fs`), which does not
-    // exist on npmjs.org, so they have to be asked of JSR instead
-    const jsrId = parseJsrNpmCompatName(parsed.name);
+    if (parsed.kind === "jsr" && !jsrId) {
+      return { source: "skipped", detail: "JSR packages must be scoped (@scope/name)" };
+    }
     if (jsrId) {
       return this.jsr.resolve(jsrId, parsed.spec, token);
     }
@@ -117,6 +170,7 @@ export class NpmLicenseProvider implements LicenseProvider {
             version: locked.version,
             source: "lockfile",
             via: `\`${lockfileName(locked.kind)}\``,
+            registryPackageName: parsed.name,
           };
         }
         if (getSetting("npm.useRegistry", true)) {
@@ -129,6 +183,7 @@ export class NpmLicenseProvider implements LicenseProvider {
           version: locked.version,
           source: "lockfile",
           via: `\`${lockfileName(locked.kind)}\``,
+          registryPackageName: parsed.name,
           detail: "the lockfile pins a version but carries no license",
         };
       }
@@ -155,6 +210,7 @@ export class NpmLicenseProvider implements LicenseProvider {
         version,
         source: license ? "registry" : "lockfile",
         homepage,
+        registryPackageName: name,
         detail: license ? undefined : "the published package declares no license",
       };
     } catch (error) {

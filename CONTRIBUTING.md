@@ -44,6 +44,32 @@ export class CratesLicenseProvider implements LicenseProvider {
 Register it in [`src/providers/index.ts`](src/providers/index.ts) and add the language to
 `activationEvents` in `package.json`.
 
+### Link the hover title to the package's registry page
+
+Every provider is expected to make the hover title clickable, the same way npm and JSR do —
+don't ship one that leaves it as plain text. Set one of these two `LicenseInfo` fields from
+`resolve()`, whichever fits the registry's URL shape:
+
+- `registryPackageName` — when the target really is `https://www.npmjs.com/package/<name>/v/<version>`
+  (npm and npm-compatible aliases only; nothing else should set this).
+- `packagePageUrl` — the exact URL for anything else, e.g. `https://crates.io/crates/<name>/<version>`
+  or `https://pypi.org/project/<name>/<version>/`. This is what JSR uses.
+
+`buildHover` in [`src/format.ts`](src/format.ts) picks whichever is set (`registryPackageName`
+wins if somehow both are) and wraps it around the `` `name@version` `` title automatically — do
+not build that link yourself. Two things matter when you set it:
+
+- **Resolve aliases first.** The link must point at the actual registry package, not the local
+  manifest key — see how the npm provider follows an `npm:` alias to its real target before
+  setting `registryPackageName` (`src/providers/npm/index.ts`).
+- **Never link something that isn't really on that registry.** A `file:`/`git`/local-path
+  dependency, or one you're not confident about, should leave both fields unset rather than
+  link to a URL that might 404.
+
+If the registry also exposes a genuine, separately-declared homepage, put that in `homepage` as
+usual — `buildHover` already drops the `Homepage` line when it would just repeat the title link
+(as it does for JSR, which has no separate homepage of its own).
+
 Python, Rust and Go support are planned but not implemented yet — see
 [README.md](README.md#other-languages) for the current status. If you want to pick one up,
 these are the metadata endpoints most likely to be useful:

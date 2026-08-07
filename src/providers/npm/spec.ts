@@ -5,12 +5,17 @@ export type NpmSpecKind =
   | "range"
   /** A dist-tag such as `latest` or `next` */
   | "tag"
+  /**
+   * A JSR package (`jsr:<range>` or `jsr:@scope/name@<range>`, as written by pnpm >=10.9 and
+   * Yarn >=4.9), resolved against jsr.io instead of the npm registry
+   */
+  | "jsr"
   /** A local path, workspace link, git or tarball reference — not resolvable this way */
   | "unresolvable";
 
 export interface ParsedSpec {
   readonly kind: NpmSpecKind;
-  /** The package to actually ask about — for an alias, the alias target */
+  /** The package to actually ask about — for an alias or a `jsr:` specifier, the real target */
   readonly name: string;
   /** The specifier to actually resolve */
   readonly spec: string;
@@ -48,6 +53,21 @@ export function parseSpec(name: string, rawSpec: string): ParsedSpec {
     const aliasName = at > 0 ? rest.slice(0, at) : rest;
     const aliasSpec = at > 0 ? rest.slice(at + 1) : "*";
     return classify(aliasName, aliasSpec);
+  }
+
+  // pnpm >=10.9 and Yarn >=4.9 install JSR packages with a `jsr:` specifier instead of the
+  // `@jsr/scope__name` npm-compatibility alias. Two shapes appear in the wild:
+  //   "@luca/cases": "jsr:^1.0.0"              — bare range, the key IS the JSR name
+  //   "cases-alias": "jsr:@luca/cases@^1.0.0"  — aliased, the JSR name is in the value
+  if (spec.startsWith("jsr:")) {
+    const rest = spec.slice("jsr:".length);
+    if (rest.startsWith("@")) {
+      const at = rest.lastIndexOf("@");
+      const jsrName = at > 0 ? rest.slice(0, at) : rest;
+      const range = at > 0 ? rest.slice(at + 1) : "";
+      return { kind: "jsr", name: jsrName, spec: range.length > 0 ? range : "latest" };
+    }
+    return { kind: "jsr", name, spec: rest.length > 0 ? rest : "latest" };
   }
 
   for (const [prefix, reason] of PROTOCOL_REASONS) {

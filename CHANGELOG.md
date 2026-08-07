@@ -1,5 +1,31 @@
 # Change Log
 
+## [0.1.1]
+
+### Added
+
+- `package.json` now understands the native `jsr:` specifier pnpm >=10.9 and Yarn >=4.9 write
+  for JSR packages — both `"@scope/name": "jsr:^1.0.0"` (bare) and `"alias": "jsr:@scope/name@^1.0.0"`
+  (aliased). Verified against a real `pnpm add jsr:@luca/cases`.
+- The hover title now links to `https://www.npmjs.com/package/<name>/v/<version>` for
+  dependencies that really are npm registry packages — including following an `npm:` alias to
+  its real target rather than linking the local package.json key. JSR packages link to their
+  own JSR page (`https://jsr.io/@scope/name@version`) instead, never to npmjs.org, since they
+  are never published there under their JSR or npm-compatibility name.
+
+### Fixed
+
+- JSR packages installed through the `@jsr` npm-compatibility layer (either the
+  `@jsr/scope__name` alias or the new native `jsr:` specifier) never got a license when they
+  were already installed: the npm-compatibility `package.json` in `node_modules` never carries a
+  `license` field — confirmed true even for `@std/fs`, which does declare MIT on JSR itself — but
+  the resolver returned "no license field" without ever asking jsr.io. It now falls back to
+  jsr.io for the license of the exact version already on disk.
+- The hover title (`package@1.2.3`) was rendered as a `mailto:` link. `name@1.2.3` is a
+  syntactically valid GFM extended email autolink — numeric domain labels are allowed, so
+  `4.17.21` parses as one — and VS Code's hover renderer (`marked`) autolinks it accordingly
+  unless it sits inside a code span. Verified directly against `marked`.
+
 ## [0.1.0]
 
 Initial release.
