@@ -148,9 +148,10 @@ export class JsrClient {
       `${this.apiUrl}/scopes/${encodeURIComponent(id.scope)}/packages/${encodeURIComponent(id.name)}/versions/${encodeURIComponent(version)}`,
       token
     );
-    const license = typeof meta.license === "string" && meta.license.trim().length > 0
-      ? meta.license.trim()
-      : undefined;
+    const license =
+      typeof meta.license === "string" && meta.license.trim().length > 0
+        ? meta.license.trim()
+        : undefined;
 
     this.cache.set(cacheKey, license ?? null);
     return license;

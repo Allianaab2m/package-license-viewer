@@ -12,7 +12,8 @@ function memoryMemento(): vscode.Memento {
   const store = new Map<string, unknown>();
   return {
     keys: () => [...store.keys()],
-    get: (<T>(key: string, fallback?: T) => (store.has(key) ? (store.get(key) as T) : fallback)) as vscode.Memento["get"],
+    get: (<T>(key: string, fallback?: T) =>
+      store.has(key) ? (store.get(key) as T) : fallback) as vscode.Memento["get"],
     update: async (key: string, value: unknown) => {
       if (value === undefined) {
         store.delete(key);
@@ -101,7 +102,10 @@ suite("parsing a real document", () => {
     ]);
 
     // peerDependenciesMeta holds objects, not specifiers, so it must not be picked up
-    assert.equal(entries.some((entry) => entry.section === "peerDependenciesMeta"), false);
+    assert.equal(
+      entries.some((entry) => entry.section === "peerDependenciesMeta"),
+      false
+    );
 
     // Every reported line must really contain that dependency
     for (const entry of entries) {
@@ -117,7 +121,10 @@ suite("parsing a real document", () => {
     const provider = new JsrLicenseProvider(new LicenseCache(memoryMemento()));
     const document = await vscode.workspace.openTextDocument(workspaceUri("deno.json"));
     const entries = provider.parse(document);
-    assert.deepEqual(entries.map((entry) => entry.name), ["@std/fs", "chalk"]);
+    assert.deepEqual(
+      entries.map((entry) => entry.name),
+      ["@std/fs", "chalk"]
+    );
   });
 });
 

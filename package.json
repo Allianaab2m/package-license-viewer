@@ -169,7 +169,9 @@
     "test": "npm run build-tests && node --test test/index.test.js test/annotator.test.js",
     "test:integration": "npm run compile && npm run build-tests && vscode-test",
     "package": "vsce package",
-    "publish": "node scripts/publish.mjs"
+    "publish": "node scripts/publish.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1",
@@ -185,6 +187,7 @@
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.24.0",
     "mocha": "^11.8.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.2"
   }
 }

@@ -3,7 +3,12 @@ import { getConfig } from "./config";
 import { buildHover, formatAnnotation } from "./format";
 import { log } from "./log";
 import { runWithConcurrency } from "./net";
-import { findProvider, type DependencyEntry, type LicenseInfo, type LicenseProvider } from "./providers";
+import {
+  findProvider,
+  type DependencyEntry,
+  type LicenseInfo,
+  type LicenseProvider,
+} from "./providers";
 
 /** How long to wait after the last keystroke before re-resolving */
 const DEBOUNCE_MS = 300;
@@ -259,7 +264,9 @@ export class Annotator implements vscode.Disposable {
   }
 
   private keyOf(provider: LicenseProvider, entry: DependencyEntry): string {
-    return provider.cacheKey(entry) ?? `${provider.id}:${entry.section}:${entry.name}@${entry.spec}`;
+    return (
+      provider.cacheKey(entry) ?? `${provider.id}:${entry.section}:${entry.name}@${entry.spec}`
+    );
   }
 
   private cancel(documentKey: string): void {

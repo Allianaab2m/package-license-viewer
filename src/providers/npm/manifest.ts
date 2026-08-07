@@ -39,7 +39,9 @@ export function normalizeLicense(manifest: NpmManifest | undefined): string | un
   return undefined;
 }
 
-function toLicenseString(value: string | { type?: string; url?: string } | undefined): string | undefined {
+function toLicenseString(
+  value: string | { type?: string; url?: string } | undefined
+): string | undefined {
   if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;

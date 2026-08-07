@@ -28,11 +28,7 @@ export function emptyIndex(kind: LockfileKind): LockIndex {
 }
 
 /** Look one entry up: exact specifier match first, then narrowing by semver */
-export function lookupInIndex(
-  index: LockIndex,
-  name: string,
-  spec: string
-): LockEntry | undefined {
+export function lookupInIndex(index: LockIndex, name: string, spec: string): LockEntry | undefined {
   const exact = index.exact.get(`${name}@${spec}`);
   if (exact) {
     return exact;
@@ -235,7 +231,12 @@ export function parsePnpmLock(text: string): LockIndex {
     // A top-level key switches sections
     if (!/^\s/.test(line)) {
       const key = line.replace(/:.*$/, "").trim();
-      section = key === "importers" ? "importers" : key === "packages" || key === "snapshots" ? "packages" : "other";
+      section =
+        key === "importers"
+          ? "importers"
+          : key === "packages" || key === "snapshots"
+            ? "packages"
+            : "other";
       continue;
     }
 

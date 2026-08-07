@@ -10,8 +10,12 @@ const OUT = path.join(__dirname, "..", "out");
 const { parseSpec, encodePackageName } = require(path.join(OUT, "providers/npm/spec.js"));
 const { normalizeLicense } = require(path.join(OUT, "providers/npm/manifest.js"));
 const { parsePackageJson } = require(path.join(OUT, "providers/npm/parse.js"));
-const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(path.join(OUT, "providers/jsr/parse.js"));
-const { parseJsrPackageName, parseJsrNpmCompatName } = require(path.join(OUT, "providers/jsr/client.js"));
+const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(
+  path.join(OUT, "providers/jsr/parse.js")
+);
+const { parseJsrPackageName, parseJsrNpmCompatName } = require(
+  path.join(OUT, "providers/jsr/client.js")
+);
 const { formatAnnotation } = require(path.join(OUT, "format.js"));
 const lock = require(path.join(OUT, "providers/npm/lockfile/parsers.js"));
 
@@ -89,7 +93,10 @@ test("normalizeLicense handles every historical shape", () => {
   assert.equal(normalizeLicense({ license: "MIT" }), "MIT");
   assert.equal(normalizeLicense({ license: { type: "ISC" } }), "ISC");
   assert.equal(normalizeLicense({ licenses: [{ type: "MIT" }] }), "MIT");
-  assert.equal(normalizeLicense({ licenses: [{ type: "MIT" }, { type: "Apache-2.0" }] }), "(MIT OR Apache-2.0)");
+  assert.equal(
+    normalizeLicense({ licenses: [{ type: "MIT" }, { type: "Apache-2.0" }] }),
+    "(MIT OR Apache-2.0)"
+  );
   assert.equal(normalizeLicense({ license: "  " }), undefined);
   assert.equal(normalizeLicense({}), undefined);
   assert.equal(normalizeLicense(undefined), undefined);
@@ -143,7 +150,10 @@ test("parsePackageJson respects autoDetectSections", () => {
     sections: ["dependencies"],
     autoDetectSections: false,
   });
-  assert.deepEqual(entries.map((e) => e.name), ["lodash", "@babel/core"]);
+  assert.deepEqual(
+    entries.map((e) => e.name),
+    ["lodash", "@babel/core"]
+  );
 });
 
 test("parsePackageJson keeps working while the JSON is half-typed", () => {
@@ -151,7 +161,10 @@ test("parsePackageJson keeps working while the JSON is half-typed", () => {
     sections: ["dependencies"],
     autoDetectSections: false,
   });
-  assert.deepEqual(entries.map((e) => e.name), ["a"]);
+  assert.deepEqual(
+    entries.map((e) => e.name),
+    ["a"]
+  );
 });
 
 // --- Deno / JSR -------------------------------------------------------------
@@ -164,12 +177,27 @@ test("isDenoManifest recognises the manifest file names", () => {
 });
 
 test("parseDenoSpecifier splits jsr: and npm: specifiers", () => {
-  assert.deepEqual({ ...parseDenoSpecifier("jsr:@std/fs@^1.0.0") }, { kind: "jsr", name: "@std/fs", range: "^1.0.0" });
-  assert.deepEqual({ ...parseDenoSpecifier("jsr:@std/fs") }, { kind: "jsr", name: "@std/fs", range: "latest" });
-  assert.deepEqual({ ...parseDenoSpecifier("npm:chalk@^5.3.0") }, { kind: "npm", name: "chalk", range: "^5.3.0" });
-  assert.deepEqual({ ...parseDenoSpecifier("npm:@scope/pkg@1.0.0") }, { kind: "npm", name: "@scope/pkg", range: "1.0.0" });
+  assert.deepEqual(
+    { ...parseDenoSpecifier("jsr:@std/fs@^1.0.0") },
+    { kind: "jsr", name: "@std/fs", range: "^1.0.0" }
+  );
+  assert.deepEqual(
+    { ...parseDenoSpecifier("jsr:@std/fs") },
+    { kind: "jsr", name: "@std/fs", range: "latest" }
+  );
+  assert.deepEqual(
+    { ...parseDenoSpecifier("npm:chalk@^5.3.0") },
+    { kind: "npm", name: "chalk", range: "^5.3.0" }
+  );
+  assert.deepEqual(
+    { ...parseDenoSpecifier("npm:@scope/pkg@1.0.0") },
+    { kind: "npm", name: "@scope/pkg", range: "1.0.0" }
+  );
   // With a trailing subpath
-  assert.deepEqual({ ...parseDenoSpecifier("npm:chalk@^5/lib/index.js") }, { kind: "npm", name: "chalk", range: "^5" });
+  assert.deepEqual(
+    { ...parseDenoSpecifier("npm:chalk@^5/lib/index.js") },
+    { kind: "npm", name: "chalk", range: "^5" }
+  );
 
   // Out of scope
   assert.equal(parseDenoSpecifier("jsr:@std/fs/"), undefined);
@@ -188,7 +216,10 @@ test("parseDenoManifest picks up only resolvable imports", () => {
   }
 }`;
   const entries = parseDenoManifest(fakeDocument(text, "d:/p/deno.json"));
-  assert.deepEqual(entries.map((e) => e.name), ["@std/fs", "chalk"]);
+  assert.deepEqual(
+    entries.map((e) => e.name),
+    ["@std/fs", "chalk"]
+  );
   assert.equal(entries[0].spec, "jsr:@std/fs@^1.0.0");
   assert.equal(entries[0].line, 2);
 });
@@ -197,7 +228,10 @@ test("parseDenoManifest also reads a bare import map", () => {
   const entries = parseDenoManifest(
     fakeDocument(`{ "@std/fs": "jsr:@std/fs@^1.0.0" }`, "d:/p/import_map.json")
   );
-  assert.deepEqual(entries.map((e) => e.name), ["@std/fs"]);
+  assert.deepEqual(
+    entries.map((e) => e.name),
+    ["@std/fs"]
+  );
 });
 
 test("JSR package names convert to and from the npm-compat form", () => {
@@ -298,13 +332,17 @@ test("lockfile: older pnpm key shapes still parse", () => {
 });
 
 test("lockfile: a yarn heading may list several specifiers", () => {
-  const index = lock.parseYarnLock(`lodash@^4.0.0, lodash@^4.17.21:\n  version "4.17.21"\n  resolved "https://x"\n`);
+  const index = lock.parseYarnLock(
+    `lodash@^4.0.0, lodash@^4.17.21:\n  version "4.17.21"\n  resolved "https://x"\n`
+  );
   assert.equal(lock.lookupInIndex(index, "lodash", "^4.0.0")?.version, "4.17.21");
   assert.equal(lock.lookupInIndex(index, "lodash", "^4.17.21")?.version, "4.17.21");
 });
 
 test("lockfile: bun nests packages under a composite key", () => {
-  const index = lock.parseBunLock(`{"packages":{"parent/lodash":["lodash@4.17.21","",{},"sha512-x"],}}`);
+  const index = lock.parseBunLock(
+    `{"packages":{"parent/lodash":["lodash@4.17.21","",{},"sha512-x"],}}`
+  );
   assert.equal(lock.lookupInIndex(index, "lodash", "^4.0.0")?.version, "4.17.21");
 });
 
@@ -336,6 +374,12 @@ test("formatAnnotation renders the template", () => {
 test("formatAnnotation stays silent when there is nothing useful to say", () => {
   assert.equal(formatAnnotation(BASE_CONFIG, ENTRY, { source: "unknown" }), undefined);
   // Skipped entries stay silent even when unknownText is set
-  assert.equal(formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "skipped" }), undefined);
-  assert.equal(formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "unknown" }), "?");
+  assert.equal(
+    formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "skipped" }),
+    undefined
+  );
+  assert.equal(
+    formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "unknown" }),
+    "?"
+  );
 });

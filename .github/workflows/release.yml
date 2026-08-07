@@ -37,6 +37,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run format:check
       - run: npm run check-types
       - run: npm test
       # Loads the bundle in a real extension host, which is the only check that catches a

@@ -39,7 +39,10 @@ export function formatAnnotation(
 }
 
 /** The detail shown when hovering an annotation */
-export function buildHover(entry: DependencyEntry, info: LicenseInfo): vscode.MarkdownString | undefined {
+export function buildHover(
+  entry: DependencyEntry,
+  info: LicenseInfo
+): vscode.MarkdownString | undefined {
   const lines: string[] = [];
   const title = info.version ? `**${entry.name}@${info.version}**` : `**${entry.name}**`;
   lines.push(title);

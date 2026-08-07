@@ -42,7 +42,12 @@ export class InstalledPackageLookup {
     let dir = startDir;
     let hit: InstalledPackage | undefined;
     for (let depth = 0; depth < MAX_WALK_UP; depth++) {
-      const candidate = vscode.Uri.joinPath(dir, "node_modules", ...name.split("/"), "package.json");
+      const candidate = vscode.Uri.joinPath(
+        dir,
+        "node_modules",
+        ...name.split("/"),
+        "package.json"
+      );
       const manifest = await readManifest(candidate);
       if (manifest) {
         hit = { manifest, uri: candidate };
