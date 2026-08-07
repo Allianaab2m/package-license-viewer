@@ -113,73 +113,12 @@ lookup; nothing else in JSR's API carries the information (the npm-compatibility
 `deno.lock` is not read yet, so a `jsr:` range resolves against the registry rather than the
 version pinned in the lockfile.
 
-## Adding another ecosystem
+## Other languages
 
-The extension is built around one interface, so Python, Rust, Go and friends can be added
-without touching the rendering, caching or scheduling code.
-See [`src/providers/types.ts`](src/providers/types.ts).
-
-```ts
-export class CratesLicenseProvider implements LicenseProvider {
-  readonly id = "crates";
-  supports(document) { return document.uri.path.endsWith("/Cargo.toml"); }
-  isEnabled() { return getSetting("crates.enabled", true); }
-  parse(document) { /* → DependencyEntry[] (name, spec, section, line) */ }
-  cacheKey(entry) { return `crates:${entry.name}@${entry.spec}`; }
-  async resolve(entry, document, token) { /* → LicenseInfo */ }
-}
-```
-
-Register it in [`src/providers/index.ts`](src/providers/index.ts) and add the language to
-`activationEvents` in `package.json`. Everything else — debouncing, cancellation, concurrency
-limits, the two-level cache, decoration rendering and hovers — is shared.
-
-Metadata endpoints for likely next providers:
-
-- PyPI: `https://pypi.org/pypi/<name>/<version>/json` → `info.license` / `info.classifiers`
-- crates.io: `https://crates.io/api/v1/crates/<name>/<version>` → `version.license`
-- Go: `https://pkg.go.dev/<module>?tab=licenses` (no JSON API; needs the module proxy or scraping)
-
-## Development
-
-```sh
-npm install
-npm run watch      # esbuild in watch mode
-# press F5 in VS Code to launch the Extension Development Host
-```
-
-```sh
-npm run check-types      # tsc --noEmit
-npm test                 # unit tests, against real lockfile fixtures
-npm run test:integration # runs the extension inside a real VS Code
-npm run package          # build a .vsix
-```
-
-The lockfiles in [`test/fixtures/lockfiles/`](test/fixtures/lockfiles/) were produced by really
-running `npm`, `pnpm`, `yarn` (classic and berry) and `bun` against the same manifest, so the
-parsers are tested against the real thing rather than hand-written samples.
-
-`npm test` also loads the bundled `dist/extension.js`, because bundling can break the extension
-on its own: a dependency whose entry point defers its `require()` calls to runtime resolves
-fine under `tsc` and then fails inside the extension host.
-
-## Releasing
-
-[`.github/workflows/release.yml`](.github/workflows/release.yml) is run by hand from the Actions
-tab. Give it a version — a bump keyword (`patch`, `minor`, `major`, `prerelease`) or an explicit
-version like `0.2.0` — and it does the rest:
-
-1. type-check, unit tests, and the integration suite in a real VS Code
-2. bump `package.json` and build the `.vsix`
-3. publish to the VS Code Marketplace
-4. commit, tag and push, then create the GitHub Release with the `.vsix` attached
-
-Publishing is skipped automatically when `VSCE_PAT` is absent, so the workflow is usable before
-you have a token. Get one from <https://marketplace.visualstudio.com/manage> — an Azure DevOps
-PAT with the Marketplace → Manage scope — and add it as a repository secret.
-
-Tagging happens only after publishing succeeded, so a failed release leaves no dangling tag.
-Tick `dry_run` to rehearse the whole pipeline without publishing, committing or tagging.
+npm and JSR are covered today. Python (PyPI), Rust (crates.io) and Go are planned — the
+extension is built around a provider interface specifically so an ecosystem is one class away,
+without touching rendering, caching or scheduling. See [CONTRIBUTING.md](CONTRIBUTING.md) if
+you'd like to add one, or just want to see how it's structured.
 
 ---
 
@@ -202,5 +141,6 @@ Tick `dry_run` to rehearse the whole pipeline without publishing, committing or 
 - `npm install` 直後に反映したいときは
   `Package License Viewer: Refresh License Annotations` を実行してください（60 秒で自動追従もします）。
 
-Python (PyPI) や Rust (crates.io) は、`LicenseProvider` を 1 つ実装して
-`src/providers/index.ts` に登録するだけで追加できます。
+対応済みは npm と JSR です。Python (PyPI) / Rust (crates.io) / Go への対応も予定しています。
+`LicenseProvider` を 1 つ実装するだけで追加できる構成になっているので、開発に参加したい場合は
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
