@@ -120,27 +120,10 @@ extension is built around a provider interface specifically so an ecosystem is o
 without touching rendering, caching or scheduling. See [CONTRIBUTING.md](CONTRIBUTING.md) if
 you'd like to add one, or just want to see how it's structured.
 
----
+## Author
 
-## 日本語
+otoneko. https://github.com/otnc
 
-依存パッケージのライセンスを、行末に薄く表示します。
+## License
 
-- 対象は `package.json` の `dependencies` / `devDependencies` / `peerDependencies` /
-  `optionalDependencies` と `*Dependencies` で終わるその他のセクション、および
-  `deno.json` などの `imports` (`jsr:` と `npm:`)。
-- 解決は **`node_modules` → ロックファイル → レジストリ** の順です。
-  インストール済みならオフラインかつ即座に、`package-lock.json` がある場合は
-  ライセンスまでロックファイルに入っているため**ネットワークアクセスなしで**表示できます。
-- **パッケージマネージャごとの分岐は不要でした。** npm / yarn classic / bun は実ディレクトリ、
-  pnpm は `.pnpm` へのシンボリックリンクですが読み取りは透過的に辿られ、
-  しかも pnpm が最上位にリンクを張るのは直接依存だけ (=注釈を付けたい対象そのもの) です。
-  唯一 `node_modules` が存在しない Yarn PnP だけがロックファイル経由になります。
-  この挙動は実際に各パッケージマネージャで install して確認済みです。
-- `file:` / `workspace:` / git 依存などレジストリで解決できないものは、何も表示しません。
-- `npm install` 直後に反映したいときは
-  `Package License Viewer: Refresh License Annotations` を実行してください（60 秒で自動追従もします）。
-
-対応済みは npm と JSR です。Python (PyPI) / Rust (crates.io) / Go への対応も予定しています。
-`LicenseProvider` を 1 つ実装するだけで追加できる構成になっているので、開発に参加したい場合は
-[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+[MIT](LICENSE)
