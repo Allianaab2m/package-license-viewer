@@ -1,0 +1,19 @@
+{
+  "name": "plv-fixture-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "plv-local-pkg": "^1.0.0",
+    "plv-legacy-pkg": "^1.0.0",
+    "@plv/plv-scoped-pkg": "^1.0.0",
+    "plv-locked-pkg": "^3.0.0",
+    "plv-git-pkg": "user/repo",
+    "plv-file-pkg": "file:../elsewhere"
+  },
+  "devDependencies": {
+    "plv-stale-pkg": "^9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "plv-local-pkg": { "optional": true }
+  }
+}

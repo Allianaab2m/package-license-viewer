@@ -1,0 +1,341 @@
+// Load the vscode stub first, because the modules under test require it
+const { fakeDocument } = require("./vscode-stub");
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { test } = require("node:test");
+
+const OUT = path.join(__dirname, "..", "out");
+const { parseSpec, encodePackageName } = require(path.join(OUT, "providers/npm/spec.js"));
+const { normalizeLicense } = require(path.join(OUT, "providers/npm/manifest.js"));
+const { parsePackageJson } = require(path.join(OUT, "providers/npm/parse.js"));
+const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(path.join(OUT, "providers/jsr/parse.js"));
+const { parseJsrPackageName, parseJsrNpmCompatName } = require(path.join(OUT, "providers/jsr/client.js"));
+const { formatAnnotation } = require(path.join(OUT, "format.js"));
+const lock = require(path.join(OUT, "providers/npm/lockfile/parsers.js"));
+
+const FIXTURES = path.join(__dirname, "fixtures", "lockfiles");
+const readFixture = (name) => fs.readFileSync(path.join(FIXTURES, name), "utf8");
+
+// --- the shipped bundle -----------------------------------------------------
+// The tests above load out/, which is plain tsc output. dist/extension.js is what actually
+// ships, and bundling can break it on its own — a dependency whose entry point defers its
+// require() calls to runtime resolves fine under tsc and then fails inside the extension
+// host. So load the real bundle too.
+
+test("the bundled extension loads and exposes its entry points", (t) => {
+  const bundle = path.join(__dirname, "..", "dist", "extension.js");
+  if (!fs.existsSync(bundle)) {
+    t.skip("dist/extension.js is not built; run npm run compile");
+    return;
+  }
+  delete require.cache[require.resolve(bundle)];
+  const extension = require(bundle);
+  assert.equal(typeof extension.activate, "function");
+  assert.equal(typeof extension.deactivate, "function");
+});
+
+// --- version specifiers -----------------------------------------------------
+
+test("parseSpec classifies npm version specifiers", () => {
+  const kindOf = (spec) => parseSpec("pkg", spec).kind;
+
+  assert.equal(kindOf("^4.17.21"), "range");
+  assert.equal(kindOf("4.17.21"), "range");
+  assert.equal(kindOf(">=1.0.0 <2.0.0"), "range");
+  assert.equal(kindOf("1.x || 2.x"), "range");
+  assert.equal(kindOf("*"), "tag");
+  assert.equal(kindOf(""), "tag");
+  assert.equal(kindOf("next"), "tag");
+
+  for (const spec of [
+    "file:../local",
+    "link:../local",
+    "workspace:*",
+    "portal:../x",
+    "patch:x@1.0.0#./p.patch",
+    "git+https://github.com/u/r.git",
+    "github:u/r",
+    "https://example.com/x.tgz",
+    "user/repo",
+    "user/repo#v1.0.0",
+  ]) {
+    assert.equal(kindOf(spec), "unresolvable", `${spec} should be unresolvable`);
+  }
+});
+
+test("parseSpec follows npm: aliases to their target", () => {
+  assert.deepEqual(
+    { ...parseSpec("lodash4", "npm:lodash@^4.0.0") },
+    { kind: "range", name: "lodash", spec: "^4.0.0" }
+  );
+  assert.deepEqual(
+    { ...parseSpec("x", "npm:@scope/pkg@1.2.3") },
+    { kind: "range", name: "@scope/pkg", spec: "1.2.3" }
+  );
+  // No version means latest
+  assert.equal(parseSpec("x", "npm:lodash").spec, "latest");
+});
+
+test("encodePackageName encodes the scope separator", () => {
+  assert.equal(encodePackageName("@babel/core"), "@babel%2fcore");
+  assert.equal(encodePackageName("lodash"), "lodash");
+});
+
+// --- license field normalisation --------------------------------------------
+
+test("normalizeLicense handles every historical shape", () => {
+  assert.equal(normalizeLicense({ license: "MIT" }), "MIT");
+  assert.equal(normalizeLicense({ license: { type: "ISC" } }), "ISC");
+  assert.equal(normalizeLicense({ licenses: [{ type: "MIT" }] }), "MIT");
+  assert.equal(normalizeLicense({ licenses: [{ type: "MIT" }, { type: "Apache-2.0" }] }), "(MIT OR Apache-2.0)");
+  assert.equal(normalizeLicense({ license: "  " }), undefined);
+  assert.equal(normalizeLicense({}), undefined);
+  assert.equal(normalizeLicense(undefined), undefined);
+});
+
+// --- parsing package.json ---------------------------------------------------
+
+const PACKAGE_JSON = `{
+  "name": "demo",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "@babel/core": "7.24.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": { "optional": true }
+  },
+  "customDependencies": {
+    "left-pad": "1.3.0"
+  },
+  "scripts": { "build": "tsc" }
+}`;
+
+const ALL_SECTIONS = {
+  sections: ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"],
+  autoDetectSections: true,
+};
+
+test("parsePackageJson finds dependencies with their line numbers", () => {
+  const entries = parsePackageJson(fakeDocument(PACKAGE_JSON), ALL_SECTIONS);
+  assert.deepEqual(
+    entries.map((e) => `${e.section}/${e.name}@${e.spec}#${e.line}`),
+    [
+      "dependencies/lodash@^4.17.21#3",
+      "dependencies/@babel/core@7.24.0#4",
+      "devDependencies/typescript@~5.7.0#7",
+      "customDependencies/left-pad@1.3.0#13",
+    ]
+  );
+});
+
+test("parsePackageJson ignores non-string values such as peerDependenciesMeta", () => {
+  const entries = parsePackageJson(fakeDocument(PACKAGE_JSON), ALL_SECTIONS);
+  assert.equal(entries.filter((e) => e.section === "peerDependenciesMeta").length, 0);
+});
+
+test("parsePackageJson respects autoDetectSections", () => {
+  const entries = parsePackageJson(fakeDocument(PACKAGE_JSON), {
+    sections: ["dependencies"],
+    autoDetectSections: false,
+  });
+  assert.deepEqual(entries.map((e) => e.name), ["lodash", "@babel/core"]);
+});
+
+test("parsePackageJson keeps working while the JSON is half-typed", () => {
+  const entries = parsePackageJson(fakeDocument(`{ "dependencies": { "a": "^1.0.0", "b": `), {
+    sections: ["dependencies"],
+    autoDetectSections: false,
+  });
+  assert.deepEqual(entries.map((e) => e.name), ["a"]);
+});
+
+// --- Deno / JSR -------------------------------------------------------------
+
+test("isDenoManifest recognises the manifest file names", () => {
+  for (const name of ["deno.json", "deno.jsonc", "jsr.json", "import_map.json"]) {
+    assert.ok(isDenoManifest(fakeDocument("{}", `d:/p/${name}`)), name);
+  }
+  assert.equal(isDenoManifest(fakeDocument("{}", "d:/p/package.json")), false);
+});
+
+test("parseDenoSpecifier splits jsr: and npm: specifiers", () => {
+  assert.deepEqual({ ...parseDenoSpecifier("jsr:@std/fs@^1.0.0") }, { kind: "jsr", name: "@std/fs", range: "^1.0.0" });
+  assert.deepEqual({ ...parseDenoSpecifier("jsr:@std/fs") }, { kind: "jsr", name: "@std/fs", range: "latest" });
+  assert.deepEqual({ ...parseDenoSpecifier("npm:chalk@^5.3.0") }, { kind: "npm", name: "chalk", range: "^5.3.0" });
+  assert.deepEqual({ ...parseDenoSpecifier("npm:@scope/pkg@1.0.0") }, { kind: "npm", name: "@scope/pkg", range: "1.0.0" });
+  // With a trailing subpath
+  assert.deepEqual({ ...parseDenoSpecifier("npm:chalk@^5/lib/index.js") }, { kind: "npm", name: "chalk", range: "^5" });
+
+  // Out of scope
+  assert.equal(parseDenoSpecifier("jsr:@std/fs/"), undefined);
+  assert.equal(parseDenoSpecifier("https://deno.land/std@0.220.0/fs/mod.ts"), undefined);
+  assert.equal(parseDenoSpecifier("node:fs"), undefined);
+  assert.equal(parseDenoSpecifier("./mod.ts"), undefined);
+});
+
+test("parseDenoManifest picks up only resolvable imports", () => {
+  const text = `{
+  "imports": {
+    "@std/fs": "jsr:@std/fs@^1.0.0",
+    "chalk": "npm:chalk@^5.3.0",
+    "@std/fs/": "jsr:@std/fs/",
+    "local": "./mod.ts"
+  }
+}`;
+  const entries = parseDenoManifest(fakeDocument(text, "d:/p/deno.json"));
+  assert.deepEqual(entries.map((e) => e.name), ["@std/fs", "chalk"]);
+  assert.equal(entries[0].spec, "jsr:@std/fs@^1.0.0");
+  assert.equal(entries[0].line, 2);
+});
+
+test("parseDenoManifest also reads a bare import map", () => {
+  const entries = parseDenoManifest(
+    fakeDocument(`{ "@std/fs": "jsr:@std/fs@^1.0.0" }`, "d:/p/import_map.json")
+  );
+  assert.deepEqual(entries.map((e) => e.name), ["@std/fs"]);
+});
+
+test("JSR package names convert to and from the npm-compat form", () => {
+  assert.deepEqual({ ...parseJsrPackageName("@std/fs") }, { scope: "std", name: "fs" });
+  assert.equal(parseJsrPackageName("lodash"), undefined);
+  assert.deepEqual({ ...parseJsrNpmCompatName("@jsr/std__fs") }, { scope: "std", name: "fs" });
+  assert.equal(parseJsrNpmCompatName("@babel/core"), undefined);
+});
+
+// --- lockfiles --------------------------------------------------------------
+// The fixtures were produced by really installing with each package manager, so every one
+// of them contains lodash@4.18.1 and @babel/code-frame@7.29.7.
+
+const REAL_LOCKFILES = [
+  ["npm.package-lock.json", lock.parseNpmLock, "npm"],
+  ["pnpm.pnpm-lock.yaml", lock.parsePnpmLock, "pnpm"],
+  ["yarn-classic.yarn.lock", lock.parseYarnLock, "yarn"],
+  ["yarn-berry.yarn.lock", lock.parseYarnLock, "yarn-berry"],
+  ["bun.bun.lock", lock.parseBunLock, "bun"],
+];
+
+for (const [fixture, parse, expectedKind] of REAL_LOCKFILES) {
+  test(`lockfile: ${fixture} resolves direct and transitive dependencies`, () => {
+    const index = parse(readFixture(fixture));
+    assert.equal(index.kind, expectedKind);
+
+    assert.equal(lock.lookupInIndex(index, "lodash", "^4.17.21")?.version, "4.18.1");
+    assert.equal(lock.lookupInIndex(index, "@babel/code-frame", "^7.24.0")?.version, "7.29.7");
+    assert.equal(lock.lookupInIndex(index, "js-tokens", "^4.0.0")?.version, "4.0.0");
+    assert.equal(lock.lookupInIndex(index, "not-in-there", "^1.0.0"), undefined);
+  });
+}
+
+test("lockfile: package-lock.json carries the license itself", () => {
+  const index = lock.parseNpmLock(readFixture("npm.package-lock.json"));
+  assert.equal(lock.lookupInIndex(index, "lodash", "^4.17.21")?.license, "MIT");
+});
+
+test("lockfile: npm lockfileVersion 1 nests dependencies", () => {
+  const index = lock.parseNpmLock(
+    JSON.stringify({
+      lockfileVersion: 1,
+      dependencies: {
+        lodash: { version: "4.17.21" },
+        chalk: { version: "2.0.0", dependencies: { "ansi-styles": { version: "3.2.1" } } },
+      },
+    })
+  );
+  assert.equal(lock.lookupInIndex(index, "ansi-styles", "^3.0.0")?.version, "3.2.1");
+});
+
+test("lockfile: npm workspaces put packages under a nested path", () => {
+  const index = lock.parseNpmLock(
+    JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        "": {},
+        "packages/app/node_modules/left-pad": { version: "1.3.0", license: "WTFPL" },
+        "packages/app": { link: true },
+      },
+    })
+  );
+  const hit = lock.lookupInIndex(index, "left-pad", "^1.0.0");
+  assert.equal(hit?.version, "1.3.0");
+  assert.equal(hit?.license, "WTFPL");
+});
+
+test("lockfile: the right version is chosen when several are present", () => {
+  const index = lock.parseNpmLock(
+    JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        "": {},
+        "node_modules/semver": { version: "7.6.0" },
+        "node_modules/foo/node_modules/semver": { version: "5.7.1" },
+      },
+    })
+  );
+  assert.equal(lock.lookupInIndex(index, "semver", "^5.0.0")?.version, "5.7.1");
+  assert.equal(lock.lookupInIndex(index, "semver", "^7.0.0")?.version, "7.6.0");
+});
+
+test("lockfile: older pnpm key shapes still parse", () => {
+  const v6 = lock.parsePnpmLock(
+    `lockfileVersion: '6.0'\n\npackages:\n\n  /@babel/code-frame@7.24.0:\n    resolution: {integrity: sha512-x}\n`
+  );
+  assert.equal(lock.lookupInIndex(v6, "@babel/code-frame", "^7.0.0")?.version, "7.24.0");
+
+  const v5 = lock.parsePnpmLock(
+    `lockfileVersion: 5.4\n\npackages:\n\n  /lodash/4.17.21:\n    resolution: {integrity: sha512-x}\n`
+  );
+  assert.equal(lock.lookupInIndex(v5, "lodash", "^4.0.0")?.version, "4.17.21");
+
+  const peers = lock.parsePnpmLock(
+    `lockfileVersion: '9.0'\n\npackages:\n\n  '@vue/compiler@3.4.0(vue@3.4.0)':\n    resolution: {integrity: sha512-x}\n`
+  );
+  assert.equal(lock.lookupInIndex(peers, "@vue/compiler", "^3.0.0")?.version, "3.4.0");
+});
+
+test("lockfile: a yarn heading may list several specifiers", () => {
+  const index = lock.parseYarnLock(`lodash@^4.0.0, lodash@^4.17.21:\n  version "4.17.21"\n  resolved "https://x"\n`);
+  assert.equal(lock.lookupInIndex(index, "lodash", "^4.0.0")?.version, "4.17.21");
+  assert.equal(lock.lookupInIndex(index, "lodash", "^4.17.21")?.version, "4.17.21");
+});
+
+test("lockfile: bun nests packages under a composite key", () => {
+  const index = lock.parseBunLock(`{"packages":{"parent/lodash":["lodash@4.17.21","",{},"sha512-x"],}}`);
+  assert.equal(lock.lookupInIndex(index, "lodash", "^4.0.0")?.version, "4.17.21");
+});
+
+// --- rendering --------------------------------------------------------------
+
+const BASE_CONFIG = { format: "${license}", showResolvedVersion: false, unknownText: "" };
+const ENTRY = { name: "lodash", spec: "^4", section: "dependencies", line: 0 };
+
+test("formatAnnotation renders the template", () => {
+  assert.equal(formatAnnotation(BASE_CONFIG, ENTRY, { license: "MIT", source: "local" }), "MIT");
+  assert.equal(
+    formatAnnotation({ ...BASE_CONFIG, format: "${name} ${version} ${license}" }, ENTRY, {
+      license: "MIT",
+      version: "4.17.21",
+      source: "local",
+    }),
+    "lodash 4.17.21 MIT"
+  );
+  assert.equal(
+    formatAnnotation({ ...BASE_CONFIG, showResolvedVersion: true }, ENTRY, {
+      license: "MIT",
+      version: "4.17.21",
+      source: "local",
+    }),
+    "MIT · 4.17.21"
+  );
+});
+
+test("formatAnnotation stays silent when there is nothing useful to say", () => {
+  assert.equal(formatAnnotation(BASE_CONFIG, ENTRY, { source: "unknown" }), undefined);
+  // Skipped entries stay silent even when unknownText is set
+  assert.equal(formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "skipped" }), undefined);
+  assert.equal(formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "unknown" }), "?");
+});

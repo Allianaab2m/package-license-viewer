@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main, release/*]
+  pull_request:
+    branches: [main, release/*]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run check-types
+      - run: npm test
+
+  # Runs the extension inside a real VS Code instance. This is the only job that exercises
+  # the bundled dist/extension.js the way the extension host loads it.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: xvfb-run -a npm run test:integration
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # vsce package runs vscode:prepublish, which type-checks and does the production build
+      - run: npx vsce package --out package-license-viewer.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: package-license-viewer.vsix
+          if-no-files-found: error

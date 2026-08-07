@@ -1,0 +1,14 @@
+node_modules/
+out/
+dist/
+*.vsix
+.vscode-test/
+.DS_Store
+
+# Secrets (PAT etc.) — never commit these
+.env
+.env.*
+!.env.example
+
+# The integration fixture ships a hand-written node_modules on purpose
+!test/fixtures/workspace/node_modules/
