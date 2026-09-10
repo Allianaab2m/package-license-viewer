@@ -32,9 +32,7 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     target: "node20",
-    // Prefer the ESM builds of dependencies. jsonc-parser's "main" is a UMD file whose inner
-    // require() calls esbuild cannot follow, which leaves them as runtime requires that blow
-    // up inside the extension host; its "module" build imports statically and bundles cleanly.
+    // Prefer the ESM builds of dependencies. jsonc-parser's "main" is a UMD file whose inner require() calls esbuild cannot follow, which leaves them as runtime requires that blow up inside the extension host; its "module" build imports statically and bundles cleanly.
     mainFields: ["module", "main"],
     outfile: "dist/extension.js",
     external: ["vscode"],

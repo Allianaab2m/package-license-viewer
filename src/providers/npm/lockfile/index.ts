@@ -29,8 +29,7 @@ const LOCKFILES: ReadonlyArray<readonly [string, Parser]> = [
   ["pnpm-lock.yaml", parsePnpmLock],
   ["yarn.lock", parseYarnLock],
   ["bun.lock", parseBunLock],
-  // bun.lockb is a binary format and cannot be read. bun writes a node_modules tree, so the
-  // installed-package path covers that case instead.
+  // bun.lockb is a binary format and cannot be read. bun writes a node_modules tree, so the installed-package path covers that case instead.
 ];
 
 export interface LockfileHit extends LockEntry {
@@ -39,12 +38,12 @@ export interface LockfileHit extends LockEntry {
 
 /**
  * Look up the pinned version of a dependency in whichever lockfile sits near the manifest.
- *
+
  * This matters for:
  *  - Yarn PnP, where there is no node_modules at all
  *  - freshly cloned or CI workspaces where nothing has been installed yet
  *  - ranges whose newest match differs from the version actually pinned
- *
+
  * npm's lockfile also stores the license, in which case no network access is needed.
  */
 export class LockfileResolver {

@@ -2,10 +2,8 @@ import * as vscode from "vscode";
 
 /**
  * One dependency taken from a manifest.
- *
- * The shape is deliberately ecosystem-agnostic: adding support for PyPI, crates.io and
- * friends should only mean writing a new provider, never touching the code that renders,
- * schedules or caches.
+
+ * The shape is deliberately ecosystem-agnostic: adding support for PyPI, crates.io and friends should only mean writing a new provider, never touching the code that renders, schedules or caches.
  */
 export interface DependencyEntry {
   /** Package name, e.g. "typescript" or "@types/node" */
@@ -46,30 +44,21 @@ export interface LicenseInfo {
   /** URL to link from the hover */
   readonly homepage?: string;
   /**
-   * The exact name to look this package up as on npmjs.org, when it really is one — e.g.
-   * the alias target of an `npm:` specifier, not the local package.json key. Left unset for
-   * JSR packages: they are never published to npmjs.org under their JSR or npm-compatibility
-   * name, so a link there would 404. Used to link the hover title to
-   * `https://www.npmjs.com/package/<name>/v/<version>`.
+   * The exact name to look this package up as on npmjs.org, when it really is one — e.g. the alias target of an `npm:` specifier, not the local package.json key. Left unset for JSR packages: they are never published to npmjs.org under their JSR or npm-compatibility name, so a link there would 404. Used to link the hover title to `https://www.npmjs.com/package/<name>/v/<version>`.
    */
   readonly registryPackageName?: string;
   /**
-   * The exact URL to link the hover title to, for registries whose package page isn't an
-   * `npmjs.org/package/<name>/v/<version>` path — currently just JSR
-   * (`https://jsr.io/@scope/name@version`). Ignored when `registryPackageName` is also set,
-   * since that always wins for a genuine npm package.
-   *
-   * Any future provider (PyPI, crates.io, …) should set this the same way — a clickable hover
-   * title is expected of every registry, not just JSR. See CONTRIBUTING.md.
+   * The exact URL to link the hover title to, for registries whose package page isn't an `npmjs.org/package/<name>/v/<version>` path — currently just JSR (`https://jsr.io/@scope/name@version`). Ignored when `registryPackageName` is also set, since that always wins for a genuine npm package.
+
+   * Any future provider (PyPI, crates.io, …) should set this the same way — a clickable hover title is expected of every registry, not just JSR. See CONTRIBUTING.md.
    */
   readonly packagePageUrl?: string;
 }
 
 /**
  * Resolves licenses for one ecosystem.
- *
- * To support a new language, implement this interface and add the class to
- * `createProviders()` in `providers/index.ts`. Nothing else needs to change.
+
+ * To support a new language, implement this interface and add the class to `createProviders()` in `providers/index.ts`. Nothing else needs to change.
  */
 export interface LicenseProvider {
   /** Unique id, also used to namespace cache keys */

@@ -9,11 +9,9 @@ export interface LockEntry {
 
 /**
  * An index over one lockfile.
- *
- * - `exact` … keyed by name plus the specifier as written in the manifest. yarn and pnpm
- *   record a resolution per specifier, which makes this the most precise lookup.
- * - `byName` … candidates keyed by name only. A lockfile may pin several versions of the
- *   same package, so the caller narrows them down with the semver range.
+
+ * - `exact` … keyed by name plus the specifier as written in the manifest. yarn and pnpm record a resolution per specifier, which makes this the most precise lookup.
+ * - `byName` … candidates keyed by name only. A lockfile may pin several versions of the same package, so the caller narrows them down with the semver range.
  */
 export interface LockIndex {
   readonly kind: LockfileKind;
@@ -34,10 +32,7 @@ export function lookupInIndex(index: LockIndex, name: string, spec: string): Loc
     return exact;
   }
 
-  // A catalog reference isn't a semver range — there is no sound way to narrow several
-  // candidates down to "the" one it resolved to, so only the exact importers match above can
-  // answer it. Guessing a same-named version pinned elsewhere in the lockfile (a transitive
-  // dependency, say) would report a plausible-looking but unrelated version.
+  // A catalog reference isn't a semver range — there is no sound way to narrow several candidates down to "the" one it resolved to, so only the exact importers match above can answer it. Guessing a same-named version pinned elsewhere in the lockfile (a transitive dependency, say) would report a plausible-looking but unrelated version.
   if (spec.startsWith("catalog:")) {
     return undefined;
   }
@@ -88,8 +83,7 @@ interface NpmLockV1Dependency {
 }
 
 /**
- * npm is the only lockfile that also stores the license, so when one is present the whole
- * lookup can happen without touching the network.
+ * npm is the only lockfile that also stores the license, so when one is present the whole lookup can happen without touching the network.
  */
 export function parseNpmLock(text: string): LockIndex {
   const index = emptyIndex("npm");
@@ -159,9 +153,7 @@ export function parseBunLock(text: string): LockIndex {
 // --- yarn (yarn.lock, both classic and berry) ------------------------------
 
 /**
- * Classic and berry both write a heading of comma-separated specifiers followed by a
- * `version` line, so one scan handles both once quoting and the `npm:` protocol are
- * accounted for.
+ * Classic and berry both write a heading of comma-separated specifiers followed by a `version` line, so one scan handles both once quoting and the `npm:` protocol are accounted for.
  */
 export function parseYarnLock(text: string): LockIndex {
   const isBerry = /^__metadata:/m.test(text);
@@ -221,8 +213,7 @@ export function parseYarnLock(text: string): LockIndex {
 /**
  * Read pnpm-lock.yaml without pulling in a YAML parser. Only two parts are needed:
  *  1. `importers`, which maps a specifier to the version it resolved to (most precise)
- *  2. the `packages` / `snapshots` headings, for name and version candidates — read
- *     loosely because lockfileVersion 5, 6 and 9 all spell them differently
+ *  2. the `packages` / `snapshots` headings, for name and version candidates — read loosely because lockfileVersion 5, 6 and 9 all spell them differently
  */
 export function parsePnpmLock(text: string): LockIndex {
   const index = emptyIndex("pnpm");

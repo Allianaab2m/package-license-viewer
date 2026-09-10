@@ -26,9 +26,8 @@ export function isDenoManifest(document: vscode.TextDocument): boolean {
 
 /**
  * Pull the dependencies out of an import map's `imports`.
- *
- * `spec` keeps the original specifier verbatim and is re-read at resolution time, which is
- * how the `jsr:` or `npm:` distinction survives the trip.
+
+ * `spec` keeps the original specifier verbatim and is re-read at resolution time, which is how the `jsr:` or `npm:` distinction survives the trip.
  */
 export function parseDenoManifest(document: vscode.TextDocument): DependencyEntry[] {
   const root = parseTree(document.getText());
@@ -90,8 +89,7 @@ function collectImports(
 }
 
 /**
- * Split `jsr:@std/fs@^1.0.0` or `npm:chalk@^5`. Anything else — `https:`, `node:`, a
- * relative path, or a trailing-slash prefix mapping — is out of scope.
+ * Split `jsr:@std/fs@^1.0.0` or `npm:chalk@^5`. Anything else — `https:`, `node:`, a relative path, or a trailing-slash prefix mapping — is out of scope.
  */
 export function parseDenoSpecifier(specifier: string): DenoSpecifier | undefined {
   const trimmed = specifier.trim();

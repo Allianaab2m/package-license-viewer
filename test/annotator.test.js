@@ -66,14 +66,8 @@ function setup(provider) {
 
 /**
  * The regression this file exists for.
- *
- * Opening a manifest fires activation, onDidChangeActiveTextEditor and
- * onDidChangeVisibleTextEditors in quick succession. Each update used to cancel the previous
- * one, and because in-flight resolutions are shared by cache key, a newer update would end up
- * awaiting a promise created by an older, now-cancelled one. The answer arrived correctly and
- * was then discarded purely because the *first* caller's token had been cancelled, so those
- * dependencies showed no license until some later event happened to redraw them. That looked
- * like "only some packages get a license, and they take a while to show up".
+
+ * Opening a manifest fires activation, onDidChangeActiveTextEditor and onDidChangeVisibleTextEditors in quick succession. Each update used to cancel the previous one, and because in-flight resolutions are shared by cache key, a newer update would end up awaiting a promise created by an older, now-cancelled one. The answer arrived correctly and was then discarded purely because the *first* caller's token had been cancelled, so those dependencies showed no license until some later event happened to redraw them. That looked like "only some packages get a license, and they take a while to show up".
  */
 test("a burst of refreshes still annotates every dependency", async () => {
   const provider = new SlowProvider(40);

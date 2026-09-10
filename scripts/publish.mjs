@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Reads VSCE_PAT from .env (gitignored) and runs `vsce publish` with it, so the token never
-// needs to be typed into a shell or exported by hand. No dependency on dotenv.
+// Reads VSCE_PAT from .env (gitignored) and runs `vsce publish` with it, so the token never needs to be typed into a shell or exported by hand. No dependency on dotenv.
 import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

@@ -14,18 +14,14 @@ export interface InstalledPackage {
 
 /**
  * Find a package that is already installed under `node_modules`.
- *
- * Layouts differ per package manager, but **for direct dependencies** they all end up
- * reachable at `<dir>/node_modules/<name>/package.json`:
- *
+
+ * Layouts differ per package manager, but **for direct dependencies** they all end up reachable at `<dir>/node_modules/<name>/package.json`:
+
  * - npm, yarn classic, bun … hoisted real directories.
- * - pnpm … a symlink into `node_modules/.pnpm/…`. Reads follow it transparently, so no
- *   special case is needed. pnpm only links direct dependencies at the top level, and
- *   direct dependencies are exactly what gets annotated.
+ * - pnpm … a symlink into `node_modules/.pnpm/…`. Reads follow it transparently, so no special case is needed. pnpm only links direct dependencies at the top level, and direct dependencies are exactly what gets annotated.
  * - yarn berry with `nodeLinker: node-modules` … real directories.
- * - yarn berry in PnP mode … there is no node_modules at all. Nothing is found here and the
- *   caller falls back to the lockfile and the registry.
- *
+ * - yarn berry in PnP mode … there is no node_modules at all. Nothing is found here and the caller falls back to the lockfile and the registry.
+
  * Parent directories are searched too, which is what makes hoisting and monorepos work.
  */
 export class InstalledPackageLookup {

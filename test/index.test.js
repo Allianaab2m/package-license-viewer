@@ -39,10 +39,7 @@ const FIXTURES = path.join(__dirname, "fixtures", "lockfiles");
 const readFixture = (name) => fs.readFileSync(path.join(FIXTURES, name), "utf8");
 
 // --- the shipped bundle -----------------------------------------------------
-// The tests above load out/, which is plain tsc output. dist/extension.js is what actually
-// ships, and bundling can break it on its own — a dependency whose entry point defers its
-// require() calls to runtime resolves fine under tsc and then fails inside the extension
-// host. So load the real bundle too.
+// The tests above load out/, which is plain tsc output. dist/extension.js is what actually ships, and bundling can break it on its own — a dependency whose entry point defers its require() calls to runtime resolves fine under tsc and then fails inside the extension host. So load the real bundle too.
 
 test("the bundled extension loads and exposes its entry points", (t) => {
   const bundle = path.join(__dirname, "..", "dist", "extension.js");
@@ -110,8 +107,7 @@ test("parseSpec follows npm: aliases to their target", () => {
   assert.equal(parseSpec("x", "npm:lodash").spec, "latest");
 });
 
-// pnpm >=10.9 and Yarn >=4.9 write these two shapes for JSR packages — verified by actually
-// running `pnpm add jsr:@luca/cases` and `pnpm add cases-alias@jsr:@luca/cases`.
+// pnpm >=10.9 and Yarn >=4.9 write these two shapes for JSR packages — verified by actually running `pnpm add jsr:@luca/cases` and `pnpm add cases-alias@jsr:@luca/cases`.
 test("parseSpec recognises the jsr: specifier pnpm/Yarn write", () => {
   // bare form: the package.json key is itself the JSR name — "@luca/cases": "jsr:^1.0.0"
   assert.deepEqual(
@@ -312,8 +308,7 @@ test("JSR package names convert to and from the npm-compat form", () => {
 });
 
 // --- lockfiles --------------------------------------------------------------
-// The fixtures were produced by really installing with each package manager, so every one
-// of them contains lodash@4.18.1 and @babel/code-frame@7.29.7.
+// The fixtures were produced by really installing with each package manager, so every one of them contains lodash@4.18.1 and @babel/code-frame@7.29.7.
 
 const REAL_LOCKFILES = [
   ["npm.package-lock.json", lock.parseNpmLock, "npm"],
@@ -494,11 +489,7 @@ test("formatAnnotation stays silent when there is nothing useful to say", () => 
 });
 
 // --- hover ---------------------------------------------------------------
-// "name@1.2.3" is a syntactically valid GFM extended email autolink — numeric domain
-// labels are allowed, so "4.17.21" parses as a domain — and VS Code's hover renderer (marked)
-// turns it into a mailto: link unless it is wrapped in a code span. Verified against `marked`
-// directly: rendering "lodash@4.17.21" produces `<a href="mailto:...">`, and wrapping it in
-// backticks is what suppresses that.
+// "name@1.2.3" is a syntactically valid GFM extended email autolink — numeric domain labels are allowed, so "4.17.21" parses as a domain — and VS Code's hover renderer (marked) turns it into a mailto: link unless it is wrapped in a code span. Verified against `marked` directly: rendering "lodash@4.17.21" produces `<a href="mailto:...">`, and wrapping it in backticks is what suppresses that.
 
 test("buildHover wraps name@version in a code span so it cannot be linkified as an email", () => {
   const hover = buildHover(ENTRY, { license: "MIT", version: "4.17.21", source: "local" });
@@ -527,8 +518,7 @@ test("buildHover links the title to npmjs.org when registryPackageName is set", 
 });
 
 test("buildHover links to the alias target, not the local package.json key", () => {
-  // "lodash4": "npm:lodash@^4.0.0" — the hover title still reads "lodash4@4.17.21" (the
-  // name the user actually wrote), but the link must point at the real npm package.
+  // "lodash4": "npm:lodash@^4.0.0" — the hover title still reads "lodash4@4.17.21" (the name the user actually wrote), but the link must point at the real npm package.
   const hover = buildHover(
     { name: "lodash4", spec: "npm:lodash@^4.0.0", section: "dependencies", line: 0 },
     { license: "MIT", version: "4.17.21", source: "registry", registryPackageName: "lodash" }
@@ -538,8 +528,7 @@ test("buildHover links to the alias target, not the local package.json key", () 
 });
 
 test("buildHover links the title to jsr.io for JSR packages, never to npmjs.org", () => {
-  // JSR packages are never published to npmjs.org under their JSR or npm-compatibility name,
-  // so registryPackageName is never set for them; JsrClient supplies packagePageUrl instead.
+  // JSR packages are never published to npmjs.org under their JSR or npm-compatibility name, so registryPackageName is never set for them; JsrClient supplies packagePageUrl instead.
   const jsrUrl = "https://jsr.io/@std/fs@1.0.24";
   const hover = buildHover(
     { name: "@std/fs", spec: "jsr:@std/fs@^1.0.0", section: "dependencies", line: 0 },
@@ -557,8 +546,7 @@ test("buildHover links the title to jsr.io for JSR packages, never to npmjs.org"
     hover.value,
     /\*\*\[`@std\/fs@1\.0\.24`\]\(https:\/\/jsr\.io\/@std\/fs@1\.0\.24\)\*\*/
   );
-  // The title link and the Homepage line would otherwise point at the exact same URL, so the
-  // redundant Homepage line is dropped.
+  // The title link and the Homepage line would otherwise point at the exact same URL, so the redundant Homepage line is dropped.
   assert.equal((hover.value.match(/\[Homepage\]/g) ?? []).length, 0);
 });
 

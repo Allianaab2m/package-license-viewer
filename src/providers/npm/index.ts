@@ -26,18 +26,14 @@ const DEFAULT_SECTIONS = [
 
 /**
  * Provider for package.json.
- *
+
  * Resolution order:
  *  1. node_modules — what is actually installed. Offline, instant, and the most trustworthy.
- *  2. the lockfile — the pinned version even under PnP or before installing. npm's lockfile
- *     carries the license too.
+ *  2. the lockfile — the pinned version even under PnP or before installing. npm's lockfile carries the license too.
  *  3. the registry — resolve the specifier's range as a last resort.
- *
- * JSR packages are a cross-cutting exception to that: whether they show up as the npm
- * compatibility alias `@jsr/scope__name` or as a native `jsr:<range>` specifier (pnpm >=10.9,
- * Yarn >=4.9), the license always has to come from jsr.io — the npm-compatibility layer's
- * package.json never carries a `license` field, installed or not.
- *
+
+ * JSR packages are a cross-cutting exception to that: whether they show up as the npm compatibility alias `@jsr/scope__name` or as a native `jsr:<range>` specifier (pnpm >=10.9, Yarn >=4.9), the license always has to come from jsr.io — the npm-compatibility layer's package.json never carries a `license` field, installed or not.
+
  * A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) skips step 3 entirely: there is no version in the manifest for the registry to resolve, only in `pnpm-workspace.yaml`, so once the lockfile lookup in step 2 comes up empty there is nothing left to try.
  */
 export class NpmLicenseProvider implements LicenseProvider {
@@ -106,10 +102,7 @@ export class NpmLicenseProvider implements LicenseProvider {
         semver.satisfies(version, parsed.spec, { loose: true, includePrerelease: true });
       if (satisfies) {
         const license = normalizeLicense(local.manifest);
-        // Only a genuine, alias-resolved semver specifier is guaranteed to name a real
-        // npmjs.org package — not a JSR package (jsrId), and not a file:/workspace:/git
-        // dependency that merely happens to be linked locally. A catalog reference names a
-        // real npm package too, its version just comes from the workspace catalog.
+        // Only a genuine, alias-resolved semver specifier is guaranteed to name a real npmjs.org package — not a JSR package (jsrId), and not a file:/workspace:/git dependency that merely happens to be linked locally. A catalog reference names a real npm package too, its version just comes from the workspace catalog.
         const registryPackageName =
           !jsrId && (parsed.kind === "range" || parsed.kind === "tag" || parsed.kind === "catalog")
             ? parsed.name
@@ -124,9 +117,7 @@ export class NpmLicenseProvider implements LicenseProvider {
           };
         }
         if (jsrId && version) {
-          // The package.json inside node_modules never carries a license field for a JSR
-          // package (true even for packages that do declare one on JSR), so ask jsr.io for
-          // the license of the exact version that is already on disk.
+          // The package.json inside node_modules never carries a license field for a JSR package (true even for packages that do declare one on JSR), so ask jsr.io for the license of the exact version that is already on disk.
           const jsrLicense = await this.jsr.fetchLicense(jsrId, version, token);
           const packagePage = this.jsr.packageUrl(jsrId, version);
           return {
@@ -134,9 +125,7 @@ export class NpmLicenseProvider implements LicenseProvider {
             version,
             source: "local",
             via: "node_modules + jsr.io",
-            // Prefer the JSR page over whatever homepage node_modules happened to record —
-            // consistent with what a full JSR resolution returns, and it's what the hover
-            // title links to.
+            // Prefer the JSR page over whatever homepage node_modules happened to record — consistent with what a full JSR resolution returns, and it's what the hover title links to.
             homepage: packagePage,
             packagePageUrl: packagePage,
             detail: jsrLicense ? undefined : "the package declares no license on JSR",

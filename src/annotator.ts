@@ -14,19 +14,16 @@ import {
 const DEBOUNCE_MS = 300;
 /**
  * Even an "immediate" refresh waits this long.
- *
- * Opening a manifest fires activation, onDidChangeActiveTextEditor and
- * onDidChangeVisibleTextEditors in a burst. Without coalescing, each one starts an update
- * that cancels the previous, which is both wasteful and a source of dropped work.
+
+ * Opening a manifest fires activation, onDidChangeActiveTextEditor and onDidChangeVisibleTextEditors in a burst. Without coalescing, each one starts an update that cancels the previous, which is both wasteful and a source of dropped work.
  */
 const COALESCE_MS = 25;
 /** Paint partial results at this interval while resolution is still running */
 const PROGRESS_FLUSH_MS = 50;
 /**
  * How long a resolved result stays fresh in memory.
- *
- * Past this we resolve again, but the old value keeps being drawn in the meantime, so nothing
- * flickers. It is also what makes annotations follow along after an `npm install`.
+
+ * Past this we resolve again, but the old value keeps being drawn in the meantime, so nothing flickers. It is also what makes annotations follow along after an `npm install`.
  */
 const RESULT_TTL_MS = 60_000;
 
@@ -203,11 +200,7 @@ export class Annotator implements vscode.Disposable {
         return { source: "unknown", detail: String(error) };
       })
       .then((info) => {
-        // Never throw away a good answer. This promise is shared, so the token belongs to
-        // whichever update asked first — and that update may since have been superseded and
-        // cancelled while a newer one was already waiting on the very same promise. Only a
-        // cancelled *failure* is discarded, so that it gets retried instead of being
-        // remembered as "unknown" for the whole TTL.
+        // Never throw away a good answer. This promise is shared, so the token belongs to whichever update asked first — and that update may since have been superseded and cancelled while a newer one was already waiting on the very same promise. Only a cancelled *failure* is discarded, so that it gets retried instead of being remembered as "unknown" for the whole TTL.
         const cancelledFailure = info.source === "unknown" && token.isCancellationRequested;
         if (!cancelledFailure) {
           this.results.set(key, { at: Date.now(), info });

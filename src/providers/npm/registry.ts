@@ -13,8 +13,7 @@ interface AbbreviatedPackument {
 }
 
 /**
- * Talks to an npm-compatible registry. Pointing it at a different base URL is enough to
- * reuse it elsewhere.
+ * Talks to an npm-compatible registry. Pointing it at a different base URL is enough to reuse it elsewhere.
  */
 export class NpmRegistryClient {
   constructor(
@@ -48,8 +47,7 @@ export class NpmRegistryClient {
       return cached ?? undefined;
     }
 
-    // The abbreviated document omits the license but is far smaller, and it is all that
-    // version resolution needs
+    // The abbreviated document omits the license but is far smaller, and it is all that version resolution needs
     const packument = await fetchJson<AbbreviatedPackument>(
       `${this.baseUrl}/${encoded}`,
       token,
@@ -73,8 +71,7 @@ export class NpmRegistryClient {
   }
 
   /**
-   * Read the license of one exact version. The answer can never change, so it is safe to
-   * cache for a long time.
+   * Read the license of one exact version. The answer can never change, so it is safe to cache for a long time.
    */
   async fetchLicense(
     name: string,

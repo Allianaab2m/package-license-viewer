@@ -6,8 +6,7 @@ export type NpmSpecKind =
   /** A dist-tag such as `latest` or `next` */
   | "tag"
   /**
-   * A JSR package (`jsr:<range>` or `jsr:@scope/name@<range>`, as written by pnpm >=10.9 and
-   * Yarn >=4.9), resolved against jsr.io instead of the npm registry
+   * A JSR package (`jsr:<range>` or `jsr:@scope/name@<range>`, as written by pnpm >=10.9 and Yarn >=4.9), resolved against jsr.io instead of the npm registry
    */
   | "jsr"
   /**
@@ -43,8 +42,7 @@ const PROTOCOL_REASONS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /**
- * Classify a package.json version specifier, so specifiers that the registry could never
- * answer are ruled out before any request is made.
+ * Classify a package.json version specifier, so specifiers that the registry could never answer are ruled out before any request is made.
  */
 export function parseSpec(name: string, rawSpec: string): ParsedSpec {
   const spec = rawSpec.trim();
@@ -59,8 +57,7 @@ export function parseSpec(name: string, rawSpec: string): ParsedSpec {
     return classify(aliasName, aliasSpec);
   }
 
-  // pnpm >=10.9 and Yarn >=4.9 install JSR packages with a `jsr:` specifier instead of the
-  // `@jsr/scope__name` npm-compatibility alias. Two shapes appear in the wild:
+  // pnpm >=10.9 and Yarn >=4.9 install JSR packages with a `jsr:` specifier instead of the `@jsr/scope__name` npm-compatibility alias. Two shapes appear in the wild:
   //   "@luca/cases": "jsr:^1.0.0"              — bare range, the key IS the JSR name
   //   "cases-alias": "jsr:@luca/cases@^1.0.0"  — aliased, the JSR name is in the value
   if (spec.startsWith("jsr:")) {

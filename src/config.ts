@@ -16,10 +16,8 @@ export interface ViewerConfig {
 
 /**
  * Cache of the unscoped config.
- *
- * getConfig() sits on a hot path — the cache consults it for every lookup and every request
- * does too — so a manifest with hundreds of dependencies would otherwise read the settings
- * thousands of times per pass. Cleared whenever the configuration changes.
+
+ * getConfig() sits on a hot path — the cache consults it for every lookup and every request does too — so a manifest with hundreds of dependencies would otherwise read the settings thousands of times per pass. Cleared whenever the configuration changes.
  */
 let unscopedCache: ViewerConfig | undefined;
 

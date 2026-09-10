@@ -8,9 +8,8 @@ export * from "./types";
 
 /**
  * Build the set of providers.
- *
- * To support another ecosystem, implement `LicenseProvider` and add it to this array —
- * no other file needs to change. For example:
+
+ * To support another ecosystem, implement `LicenseProvider` and add it to this array — no other file needs to change. For example:
  *   new PypiLicenseProvider(cache)   // requirements.txt / pyproject.toml
  *   new CratesLicenseProvider(cache) // Cargo.toml
  * Remember to add the language to `activationEvents` in package.json as well.

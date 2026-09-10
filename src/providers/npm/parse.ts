@@ -11,9 +11,8 @@ export interface NpmParseOptions {
 
 /**
  * Extract dependencies from a package.json.
- *
- * Uses the jsonc-parser AST so half-typed, temporarily invalid JSON still yields
- * whatever can be read.
+
+ * Uses the jsonc-parser AST so half-typed, temporarily invalid JSON still yields whatever can be read.
  */
 export function parsePackageJson(
   document: vscode.TextDocument,

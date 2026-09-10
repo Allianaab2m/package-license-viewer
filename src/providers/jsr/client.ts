@@ -42,10 +42,8 @@ export function parseJsrNpmCompatName(fullName: string): JsrPackageId | undefine
 
 /**
  * Reads metadata from JSR (jsr.io).
- *
- * The license only exists on the per-version endpoint of api.jsr.io, and it is null unless
- * the package declared a `license` in its deno.json / jsr.json. The npm-compatibility
- * endpoint at npm.jsr.io carries no license at all, so it is not used.
+
+ * The license only exists on the per-version endpoint of api.jsr.io, and it is null unless the package declared a `license` in its deno.json / jsr.json. The npm-compatibility endpoint at npm.jsr.io carries no license at all, so it is not used.
  */
 export class JsrClient {
   constructor(private readonly cache: LicenseCache) {}
@@ -59,9 +57,7 @@ export class JsrClient {
   }
 
   /**
-   * The JSR page for one exact version, e.g. `https://jsr.io/@std/fs@1.0.24`. Public so the
-   * npm provider can link to it too, for a JSR package it already found installed locally
-   * (where it only needs `fetchLicense`, not a full `resolve`).
+   * The JSR page for one exact version, e.g. `https://jsr.io/@std/fs@1.0.24`. Public so the npm provider can link to it too, for a JSR package it already found installed locally (where it only needs `fetchLicense`, not a full `resolve`).
    */
   packageUrl(id: JsrPackageId, version: string): string {
     return `${this.registryUrl}/@${id.scope}/${id.name}@${version}`;
@@ -85,8 +81,7 @@ export class JsrClient {
         version,
         source: "registry",
         via: "jsr.io",
-        // JSR's API doesn't expose a separately declared homepage, so the package's own JSR
-        // page doubles as both — it's also what the hover title links to.
+        // JSR's API doesn't expose a separately declared homepage, so the package's own JSR page doubles as both — it's also what the hover title links to.
         homepage: packagePage,
         packagePageUrl: packagePage,
         detail: license ? undefined : "the package declares no license on JSR",
@@ -147,12 +142,8 @@ export class JsrClient {
 
   /**
    * Read the license of one exact, already-known version.
-   *
-   * Public because the npm provider needs it too: a package installed through the `@jsr`
-   * npm-compatibility registry never carries a `license` field in its local package.json (this
-   * is a gap in JSR's npm-compat layer, confirmed on both an unlicensed and a licensed
-   * package), so once it has the version from node_modules it still has to ask jsr.io for the
-   * license.
+
+   * Public because the npm provider needs it too: a package installed through the `@jsr` npm-compatibility registry never carries a `license` field in its local package.json (this is a gap in JSR's npm-compat layer, confirmed on both an unlicensed and a licensed package), so once it has the version from node_modules it still has to ask jsr.io for the license.
    */
   async fetchLicense(
     id: JsrPackageId,

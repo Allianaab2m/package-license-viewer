@@ -26,8 +26,7 @@ Shows the license of every dependency inline, dimmed at the end of the line.
 }
 ```
 
-Hover an annotation to see the resolved version, where the information came from, and a link to
-the package homepage.
+Hover an annotation to see the resolved version, where the information came from, and a link to the package homepage.
 
 | Manifest | Sections read |
 | --- | --- |
@@ -36,29 +35,13 @@ the package homepage.
 
 ## How a license is resolved
 
-1. **The installed package, first.** `node_modules/<name>/package.json`, walking up parent
-   directories. Instant, works offline, and reflects the version that is actually installed.
-2. **The lockfile.** Gives the exact pinned version even when nothing is installed yet.
-   `package-lock.json` carries the license itself, so npm projects can resolve with **no network
-   access at all**.
-3. **The registry.** `registry.npmjs.org` for npm, `jsr.io` for JSR. Results are cached on disk
-   for a week.
+1. **The installed package, first.** `node_modules/<name>/package.json`, walking up parent directories. Instant, works offline, and reflects the version that is actually installed.
+2. **The lockfile.** Gives the exact pinned version even when nothing is installed yet. `package-lock.json` carries the license itself, so npm projects can resolve with **no network access at all**.
+3. **The registry.** `registry.npmjs.org` for npm, `jsr.io` for JSR. Results are cached on disk for a week.
 
-Specifiers that cannot be resolved — `file:`, `link:`, `workspace:`, `git+…`, `user/repo`,
-tarball URLs, `https://` imports — are left un-annotated rather than marked unknown.
-A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) has no version of its own in
-`package.json` to resolve against the registry, but `pnpm-lock.yaml` records what it resolved
-to, so it works wherever the lockfile is readable.
-`npm:` aliases are followed to their target. JSR packages inside `package.json` are recognized
-either way they show up — the npm-compatibility alias `@jsr/scope__name`, or the native
-`jsr:<range>` / `jsr:@scope/name@<range>` specifier pnpm ≥10.9 and Yarn ≥4.9 write directly —
-and routed to JSR automatically, since the npm-compatibility registry never publishes a license
-for them, installed or not.
+Specifiers that cannot be resolved — `file:`, `link:`, `workspace:`, `git+…`, `user/repo`, tarball URLs, `https://` imports — are left un-annotated rather than marked unknown. A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) has no version of its own in `package.json` to resolve against the registry, but `pnpm-lock.yaml` records what it resolved to, so it works wherever the lockfile is readable. `npm:` aliases are followed to their target. JSR packages inside `package.json` are recognized either way they show up — the npm-compatibility alias `@jsr/scope__name`, or the native `jsr:<range>` / `jsr:@scope/name@<range>` specifier pnpm ≥10.9 and Yarn ≥4.9 write directly — and routed to JSR automatically, since the npm-compatibility registry never publishes a license for them, installed or not.
 
-The hover title links to the npmjs.org package page for dependencies that really are npm
-registry packages (following an `npm:` alias to its actual target), and to the matching JSR
-page for JSR packages — never to npmjs.org for those, since they aren't published there under
-their JSR or npm-compatibility name.
+The hover title links to the npmjs.org package page for dependencies that really are npm registry packages (following an `npm:` alias to its actual target), and to the matching JSR page for JSR packages — never to npmjs.org for those, since they aren't published there under their JSR or npm-compatibility name.
 
 ### Package managers
 
@@ -73,14 +56,9 @@ Every layout below was verified by actually installing with that package manager
 | **yarn berry** (`nodeLinker: node-modules`) | real directories | `node_modules` |
 | **yarn berry** (PnP) | **no `node_modules` at all** | `yarn.lock` for the pinned version, then the registry for its license |
 
-So no per-package-manager branching is needed for the common case — the only real gap is Yarn
-PnP, which the lockfile layer covers. The same layer also handles a freshly cloned repository
-where `npm install` has not run yet.
+So no per-package-manager branching is needed for the common case — the only real gap is Yarn PnP, which the lockfile layer covers. The same layer also handles a freshly cloned repository where `npm install` has not run yet.
 
-Lockfile formats understood: `package-lock.json` (v1/v2/v3, including workspaces),
-`npm-shrinkwrap.json`, `pnpm-lock.yaml` (v5/v6/v9), `yarn.lock` (classic and berry), and
-`bun.lock`. `bun.lockb` is binary and is skipped — bun installs into `node_modules`, so that
-path covers it.
+Lockfile formats understood: `package-lock.json` (v1/v2/v3, including workspaces), `npm-shrinkwrap.json`, `pnpm-lock.yaml` (v5/v6/v9), `yarn.lock` (classic and berry), and `bun.lock`. `bun.lockb` is binary and is skipped — bun installs into `node_modules`, so that path covers it.
 
 ## Commands
 
@@ -115,23 +93,13 @@ path covers it.
 
 ### A note on JSR licenses
 
-JSR only exposes a license for a version if the package declared one in its `deno.json` /
-`jsr.json`. Many packages have not, and for those the API returns `null` — the hover then says
-_"the package declares no license on JSR"_. This is a gap in the published metadata, not in the
-lookup; nothing else in JSR's API carries the information (the npm-compatibility endpoint at
-`npm.jsr.io` does not include a `license` field either).
+JSR only exposes a license for a version if the package declared one in its `deno.json` / `jsr.json`. Many packages have not, and for those the API returns `null` — the hover then says _"the package declares no license on JSR"_. This is a gap in the published metadata, not in the lookup; nothing else in JSR's API carries the information (the npm-compatibility endpoint at `npm.jsr.io` does not include a `license` field either).
 
-`deno.lock` is not read yet, so a `jsr:` range resolves against the registry rather than the
-version pinned in the lockfile.
+`deno.lock` is not read yet, so a `jsr:` range resolves against the registry rather than the version pinned in the lockfile.
 
 ## Other languages
 
-npm and JSR are covered today. Python (PyPI), Rust (crates.io) and Go are planned — the
-extension is built around a provider interface specifically so an ecosystem is one class away,
-without touching rendering, caching or scheduling. Every ecosystem is expected to link the
-hover title to its own registry page too, the same way npm and JSR already do. See
-[CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to add one, or just want to see how it's
-structured.
+npm and JSR are covered today. Python (PyPI), Rust (crates.io) and Go are planned — the extension is built around a provider interface specifically so an ecosystem is one class away, without touching rendering, caching or scheduling. Every ecosystem is expected to link the hover title to its own registry page too, the same way npm and JSR already do. See [CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to add one, or just want to see how it's structured.
 
 ## Author
 

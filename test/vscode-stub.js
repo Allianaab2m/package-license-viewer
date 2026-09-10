@@ -2,8 +2,7 @@ const Module = require("node:module");
 const path = require("node:path");
 
 /**
- * The `vscode` module only exists inside the extension host, so tests inject a minimal stub
- * to be able to load the source. Only the APIs actually used are implemented.
+ * The `vscode` module only exists inside the extension host, so tests inject a minimal stub to be able to load the source. Only the APIs actually used are implemented.
  */
 
 /** Editors the stub reports as visible. Tests replace this through setVisibleEditors(). */
@@ -135,8 +134,7 @@ function fakeDocument(text, fsPath = "d:/project/package.json") {
 }
 
 /**
- * An editor that records every setDecorations call, so tests can assert on what would
- * actually have been drawn.
+ * An editor that records every setDecorations call, so tests can assert on what would actually have been drawn.
  */
 function fakeEditor(document) {
   const calls = [];

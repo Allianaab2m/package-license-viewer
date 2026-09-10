@@ -128,9 +128,7 @@ suite("parsing a real document", () => {
   });
 });
 
-// These run with packageLicenseViewer.npm.useRegistry disabled in the fixture's
-// .vscode/settings.json, so they prove the offline paths work through the real
-// vscode.workspace.fs and vscode.Uri APIs — including on Windows paths.
+// These run with packageLicenseViewer.npm.useRegistry disabled in the fixture's .vscode/settings.json, so they prove the offline paths work through the real vscode.workspace.fs and vscode.Uri APIs — including on Windows paths.
 suite("resolving offline", () => {
   let provider: NpmLicenseProvider;
   let document: vscode.TextDocument;

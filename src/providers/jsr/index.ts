@@ -64,8 +64,7 @@ export class JsrLicenseProvider implements LicenseProvider {
 }
 
 /**
- * Resolve one package against the npm registry. Shared by Deno's `npm:` specifiers and by
- * the package.json provider.
+ * Resolve one package against the npm registry. Shared by Deno's `npm:` specifiers and by the package.json provider.
  */
 export async function resolveViaNpmRegistry(
   client: NpmRegistryClient,
@@ -74,8 +73,7 @@ export async function resolveViaNpmRegistry(
   token: vscode.CancellationToken
 ): Promise<LicenseInfo> {
   const parsed = parseSpec(name, spec);
-  // This helper only talks to npmjs.org, so a `jsr:` specifier (which parseSpec also
-  // recognises, for the package.json provider's benefit) has no business reaching it.
+  // This helper only talks to npmjs.org, so a `jsr:` specifier (which parseSpec also recognises, for the package.json provider's benefit) has no business reaching it.
   if (parsed.kind !== "range" && parsed.kind !== "tag") {
     return {
       source: "skipped",
