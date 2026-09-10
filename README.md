@@ -46,6 +46,9 @@ the package homepage.
 
 Specifiers that cannot be resolved — `file:`, `link:`, `workspace:`, `git+…`, `user/repo`,
 tarball URLs, `https://` imports — are left un-annotated rather than marked unknown.
+A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) has no version of its own in
+`package.json` to resolve against the registry, but `pnpm-lock.yaml` records what it resolved
+to, so it works wherever the lockfile is readable.
 `npm:` aliases are followed to their target. JSR packages inside `package.json` are recognized
 either way they show up — the npm-compatibility alias `@jsr/scope__name`, or the native
 `jsr:<range>` / `jsr:@scope/name@<range>` specifier pnpm ≥10.9 and Yarn ≥4.9 write directly —

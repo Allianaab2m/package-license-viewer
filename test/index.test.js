@@ -85,6 +85,18 @@ test("parseSpec classifies npm version specifiers", () => {
   }
 });
 
+// pnpm workspace catalogs write the specifier verbatim into package.json — verified against a real `pnpm add` with a `catalog:` entry in pnpm-workspace.yaml.
+test("parseSpec recognises pnpm workspace catalog references", () => {
+  assert.deepEqual(
+    { ...parseSpec("typescript", "catalog:") },
+    { kind: "catalog", name: "typescript", spec: "catalog:" }
+  );
+  assert.deepEqual(
+    { ...parseSpec("typescript", "catalog:build") },
+    { kind: "catalog", name: "typescript", spec: "catalog:build" }
+  );
+});
+
 test("parseSpec follows npm: aliases to their target", () => {
   assert.deepEqual(
     { ...parseSpec("lodash4", "npm:lodash@^4.0.0") },
@@ -125,6 +137,19 @@ test("resolve() skips a jsr: specifier whose name is not scoped, rather than sen
     noCancel
   );
   assert.equal(info.source, "skipped");
+});
+
+// A `catalog:` reference has no version of its own to send to npmjs.org — only pnpm-lock.yaml's importers section knows what it resolved to. Previously it was misclassified as `unresolvable` (alongside file:/workspace:/git) and silently skipped instead of ever being looked up there (issue #1).
+test("resolve() reports a catalog: reference as unknown, not skipped, when no lockfile answers it", async () => {
+  const provider = new NpmLicenseProvider(new LicenseCache(memoryMemento()));
+  const document = fakeDocument("{}", "d:/project/package.json");
+  const info = await provider.resolve(
+    { name: "typescript", spec: "catalog:", section: "devDependencies", line: 0 },
+    document,
+    noCancel
+  );
+  assert.equal(info.source, "unknown");
+  assert.match(info.detail, /catalog/);
 });
 
 test("encodePackageName encodes the scope separator", () => {
@@ -374,6 +399,45 @@ test("lockfile: older pnpm key shapes still parse", () => {
     `lockfileVersion: '9.0'\n\npackages:\n\n  '@vue/compiler@3.4.0(vue@3.4.0)':\n    resolution: {integrity: sha512-x}\n`
   );
   assert.equal(lock.lookupInIndex(peers, "@vue/compiler", "^3.0.0")?.version, "3.4.0");
+});
+
+// pnpm records a catalog dependency's specifier verbatim (`catalog:`, or `catalog:<name>` for a named catalog) next to the version it actually resolved to — same shape as any other importer entry, just with a specifier that isn't a semver range (issue #1).
+test("lockfile: pnpm records what a workspace catalog reference resolved to", () => {
+  const index = lock.parsePnpmLock(
+    [
+      "lockfileVersion: '9.0'",
+      "",
+      "importers:",
+      "",
+      "  .:",
+      "    devDependencies:",
+      "      typescript:",
+      "        specifier: catalog:",
+      "        version: 5.6.3",
+      "      vitest:",
+      "        specifier: catalog:test",
+      "        version: 2.1.5",
+      "",
+    ].join("\n")
+  );
+  assert.equal(lock.lookupInIndex(index, "typescript", "catalog:")?.version, "5.6.3");
+  assert.equal(lock.lookupInIndex(index, "vitest", "catalog:test")?.version, "2.1.5");
+});
+
+// `catalog:` isn't a semver range, so unlike a normal specifier it must never fall back to "the only same-named version pinned anywhere in the lockfile" — that version could be an unrelated transitive dependency's, not what the catalog actually resolved to.
+test("lockfile: a catalog: specifier never falls back to an unrelated same-named version", () => {
+  const index = lock.parsePnpmLock(
+    [
+      "lockfileVersion: '9.0'",
+      "",
+      "packages:",
+      "",
+      "  typescript@5.4.2:",
+      "    resolution: {integrity: sha512-x}",
+      "",
+    ].join("\n")
+  );
+  assert.equal(lock.lookupInIndex(index, "typescript", "catalog:"), undefined);
 });
 
 test("lockfile: a yarn heading may list several specifiers", () => {

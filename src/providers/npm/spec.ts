@@ -10,6 +10,10 @@ export type NpmSpecKind =
    * Yarn >=4.9), resolved against jsr.io instead of the npm registry
    */
   | "jsr"
+  /**
+   * A pnpm workspace catalog reference (`catalog:` or `catalog:<name>`). The registry has no way to answer this — the actual version lives in the workspace's `pnpm-workspace.yaml` — but `pnpm-lock.yaml` records the specifier verbatim next to the version it resolved to, so the lockfile can still answer it.
+   */
+  | "catalog"
   /** A local path, workspace link, git or tarball reference — not resolvable this way */
   | "unresolvable";
 
@@ -68,6 +72,11 @@ export function parseSpec(name: string, rawSpec: string): ParsedSpec {
       return { kind: "jsr", name: jsrName, spec: range.length > 0 ? range : "latest" };
     }
     return { kind: "jsr", name, spec: rest.length > 0 ? rest : "latest" };
+  }
+
+  // pnpm workspace catalogs (`"catalog:"` for the default catalog, `"catalog:name"` for a named one) are written verbatim into package.json. There is no version here to resolve against a registry — only the lockfile's `importers` section, which pins the specifier to the version the catalog resolved to at install time.
+  if (spec.startsWith("catalog:")) {
+    return { kind: "catalog", name, spec };
   }
 
   for (const [prefix, reason] of PROTOCOL_REASONS) {

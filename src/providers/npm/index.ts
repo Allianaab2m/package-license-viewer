@@ -37,6 +37,8 @@ const DEFAULT_SECTIONS = [
  * compatibility alias `@jsr/scope__name` or as a native `jsr:<range>` specifier (pnpm >=10.9,
  * Yarn >=4.9), the license always has to come from jsr.io — the npm-compatibility layer's
  * package.json never carries a `license` field, installed or not.
+ *
+ * A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) skips step 3 entirely: there is no version in the manifest for the registry to resolve, only in `pnpm-workspace.yaml`, so once the lockfile lookup in step 2 comes up empty there is nothing left to try.
  */
 export class NpmLicenseProvider implements LicenseProvider {
   readonly id = "npm";
@@ -106,9 +108,12 @@ export class NpmLicenseProvider implements LicenseProvider {
         const license = normalizeLicense(local.manifest);
         // Only a genuine, alias-resolved semver specifier is guaranteed to name a real
         // npmjs.org package — not a JSR package (jsrId), and not a file:/workspace:/git
-        // dependency that merely happens to be linked locally.
+        // dependency that merely happens to be linked locally. A catalog reference names a
+        // real npm package too, its version just comes from the workspace catalog.
         const registryPackageName =
-          !jsrId && (parsed.kind === "range" || parsed.kind === "tag") ? parsed.name : undefined;
+          !jsrId && (parsed.kind === "range" || parsed.kind === "tag" || parsed.kind === "catalog")
+            ? parsed.name
+            : undefined;
         if (license) {
           return {
             license,
@@ -187,6 +192,16 @@ export class NpmLicenseProvider implements LicenseProvider {
           detail: "the lockfile pins a version but carries no license",
         };
       }
+    }
+
+    // A catalog reference has no version of its own — only pnpm-lock.yaml's importers section records what it resolved to — so there is nothing left for the registry to resolve once the lockfile lookup above has come up empty.
+    if (parsed.kind === "catalog") {
+      return {
+        source: "unknown",
+        detail: getSetting("npm.useLockfiles", true)
+          ? "no matching entry in pnpm-lock.yaml for this workspace catalog reference"
+          : "not installed and lockfile lookups are disabled",
+      };
     }
 
     if (!getSetting("npm.useRegistry", true)) {

@@ -34,6 +34,14 @@ export function lookupInIndex(index: LockIndex, name: string, spec: string): Loc
     return exact;
   }
 
+  // A catalog reference isn't a semver range — there is no sound way to narrow several
+  // candidates down to "the" one it resolved to, so only the exact importers match above can
+  // answer it. Guessing a same-named version pinned elsewhere in the lockfile (a transitive
+  // dependency, say) would report a plausible-looking but unrelated version.
+  if (spec.startsWith("catalog:")) {
+    return undefined;
+  }
+
   const candidates = index.byName.get(name);
   if (!candidates || candidates.length === 0) {
     return undefined;
