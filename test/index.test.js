@@ -10,6 +10,7 @@ const OUT = path.join(__dirname, "..", "out");
 const { parseSpec, encodePackageName } = require(path.join(OUT, "providers/npm/spec.js"));
 const { normalizeLicense } = require(path.join(OUT, "providers/npm/manifest.js"));
 const { parsePackageJson } = require(path.join(OUT, "providers/npm/parse.js"));
+const { parsePnpmWorkspaceYaml } = require(path.join(OUT, "providers/npm/pnpmWorkspace.js"));
 const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(
   path.join(OUT, "providers/jsr/parse.js")
 );
@@ -257,6 +258,67 @@ test("parsePackageJson keeps working while the JSON is half-typed", () => {
     entries.map((e) => e.name),
     ["a"]
   );
+});
+
+// --- pnpm-workspace.yaml catalogs -------------------------------------------
+// The versions declared here are the real thing (issue #3): ordinary ranges resolved exactly like any other dependency, just parsed out of YAML instead of a package.json.
+
+test("parsePnpmWorkspaceYaml reads the default catalog", () => {
+  const yaml = [
+    "packages:",
+    "  - 'packages/*'",
+    "",
+    "catalog:",
+    "  react: ^18.3.1",
+    "  '@types/node': ^22.0.0",
+    "  typescript: 5.6.3",
+    "",
+  ].join("\n");
+  const entries = parsePnpmWorkspaceYaml(fakeDocument(yaml, "d:/repo/pnpm-workspace.yaml"));
+  assert.deepEqual(
+    entries.map((e) => [e.name, e.spec, e.section]),
+    [
+      ["react", "^18.3.1", "catalog"],
+      ["@types/node", "^22.0.0", "catalog"],
+      ["typescript", "5.6.3", "catalog"],
+    ]
+  );
+});
+
+test("parsePnpmWorkspaceYaml reads named catalogs separately", () => {
+  const yaml = [
+    "catalogs:",
+    "  react17:",
+    "    react: ^17.0.2",
+    "    react-dom: ^17.0.2",
+    "  build:",
+    "    typescript: ^5.4.0",
+    "",
+  ].join("\n");
+  const entries = parsePnpmWorkspaceYaml(fakeDocument(yaml, "d:/repo/pnpm-workspace.yaml"));
+  assert.deepEqual(
+    entries.map((e) => [e.name, e.spec, e.section]),
+    [
+      ["react", "^17.0.2", "catalogs.react17"],
+      ["react-dom", "^17.0.2", "catalogs.react17"],
+      ["typescript", "^5.4.0", "catalogs.build"],
+    ]
+  );
+});
+
+test("parsePnpmWorkspaceYaml ignores unrelated top-level sections", () => {
+  const yaml = ["packages:", "  - 'apps/*'", "", "catalog:", "  lodash: ^4.17.21", ""].join("\n");
+  const entries = parsePnpmWorkspaceYaml(fakeDocument(yaml, "d:/repo/pnpm-workspace.yaml"));
+  assert.deepEqual(
+    entries.map((e) => e.name),
+    ["lodash"]
+  );
+});
+
+test("NpmLicenseProvider.supports recognises pnpm-workspace.yaml, not other yaml files", () => {
+  const provider = new NpmLicenseProvider(new LicenseCache(memoryMemento()));
+  assert.equal(provider.supports(fakeDocument("catalog:\n", "d:/repo/pnpm-workspace.yaml")), true);
+  assert.equal(provider.supports(fakeDocument("foo: bar\n", "d:/repo/other.yaml")), false);
 });
 
 // --- Deno / JSR -------------------------------------------------------------

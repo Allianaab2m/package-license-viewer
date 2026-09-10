@@ -14,6 +14,7 @@ import { InstalledPackageLookup } from "./installed";
 import { LockfileResolver } from "./lockfile";
 import { normalizeLicense } from "./manifest";
 import { parsePackageJson } from "./parse";
+import { parsePnpmWorkspaceYaml } from "./pnpmWorkspace";
 import { NpmRegistryClient } from "./registry";
 import { parseSpec } from "./spec";
 
@@ -35,6 +36,8 @@ const DEFAULT_SECTIONS = [
  * JSR packages are a cross-cutting exception to that: whether they show up as the npm compatibility alias `@jsr/scope__name` or as a native `jsr:<range>` specifier (pnpm >=10.9, Yarn >=4.9), the license always has to come from jsr.io — the npm-compatibility layer's package.json never carries a `license` field, installed or not.
 
  * A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) skips step 3 entirely: there is no version in the manifest for the registry to resolve, only in `pnpm-workspace.yaml`, so once the lockfile lookup in step 2 comes up empty there is nothing left to try.
+
+ * `pnpm-workspace.yaml` itself is also understood, separately from package.json: its `catalog:` and `catalogs:` sections list the actual ranges a catalog reference resolves to, so those get annotated exactly like a normal dependency — the three resolution steps above apply unchanged.
  */
 export class NpmLicenseProvider implements LicenseProvider {
   readonly id = "npm";
@@ -51,8 +54,14 @@ export class NpmLicenseProvider implements LicenseProvider {
 
   supports(document: vscode.TextDocument): boolean {
     const path = document.uri.path;
-    // Never annotate a package.json that lives inside node_modules
-    return path.endsWith("/package.json") && !path.includes("/node_modules/");
+    if (path.endsWith("/package.json")) {
+      // Never annotate a package.json that lives inside node_modules
+      return !path.includes("/node_modules/");
+    }
+    if (path.endsWith("/pnpm-workspace.yaml") || path.endsWith("/pnpm-workspace.yml")) {
+      return getSetting("npm.pnpmWorkspaceCatalogs", true);
+    }
+    return false;
   }
 
   isEnabled(): boolean {
@@ -60,6 +69,10 @@ export class NpmLicenseProvider implements LicenseProvider {
   }
 
   parse(document: vscode.TextDocument): DependencyEntry[] {
+    const path = document.uri.path;
+    if (path.endsWith("/pnpm-workspace.yaml") || path.endsWith("/pnpm-workspace.yml")) {
+      return parsePnpmWorkspaceYaml(document);
+    }
     return parsePackageJson(document, {
       sections: getSetting<string[]>("npm.sections", DEFAULT_SECTIONS),
       autoDetectSections: getSetting("npm.autoDetectSections", true),

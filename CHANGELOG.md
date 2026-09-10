@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `pnpm-workspace.yaml` is now annotated directly: the `catalog:` (default) and `catalogs:` (named) sections list the actual ranges a workspace catalog resolves to, and those get the same inline license annotation and hover as any other dependency ([#3]).
+
 ### Fixed
 
 - pnpm workspace catalog dependencies (`"typescript": "catalog:"`, or a named catalog such as `"catalog:build"`) never resolved: the specifier was misclassified the same way as `file:`/`workspace:`/git dependencies and skipped before ever reaching the lockfile, even though `pnpm-lock.yaml`'s `importers` section records exactly what a catalog reference resolved to. It is now read from there like any other pinned version ([#1], reported by [@otnc](https://github.com/otnc)).
@@ -9,6 +13,7 @@
 
 [#1]: https://github.com/otoneko1102/package-license-viewer/issues/1
 [#2]: https://github.com/otoneko1102/package-license-viewer/issues/2
+[#3]: https://github.com/otoneko1102/package-license-viewer/issues/3
 
 ## [0.1.1]
 

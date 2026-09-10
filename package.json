@@ -35,7 +35,8 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:json",
-    "onLanguage:jsonc"
+    "onLanguage:jsonc",
+    "onLanguage:yaml"
   ],
   "contributes": {
     "commands": [
@@ -141,6 +142,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Also annotate any other top-level object whose key ends with `dependencies` (e.g. `resolutions` style custom sections named `*Dependencies`)."
+        },
+        "packageLicenseViewer.npm.pnpmWorkspaceCatalogs": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also annotate the `catalog:` and `catalogs:` sections of `pnpm-workspace.yaml`, where a workspace catalog's actual versions are declared."
         },
         "packageLicenseViewer.jsr.enabled": {
           "type": "boolean",
