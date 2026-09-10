@@ -2,7 +2,7 @@
   "name": "package-license-viewer",
   "displayName": "Package License Viewer",
   "description": "Shows the license of each dependency inline, dimmed at the end of the line in package.json and deno.json.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "otoneko1102",
   "license": "MIT",
   "engines": {
