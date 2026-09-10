@@ -1,6 +1,6 @@
 # Change Log
 
-## [Unreleased]
+## [0.2.0]
 
 ### Added
 
@@ -17,7 +17,7 @@
 [#3]: https://github.com/otoneko1102/package-license-viewer/issues/3
 [#4]: https://github.com/otoneko1102/package-license-viewer/issues/4
 
-## [0.1.1]
+## [0.1.2]
 
 ### Added
 
@@ -28,6 +28,10 @@
 
 - JSR packages installed through the `@jsr` npm-compatibility layer (either the `@jsr/scope__name` alias or the new native `jsr:` specifier) never got a license when they were already installed: the npm-compatibility `package.json` in `node_modules` never carries a `license` field — confirmed true even for `@std/fs`, which does declare MIT on JSR itself — but the resolver returned "no license field" without ever asking jsr.io. It now falls back to jsr.io for the license of the exact version already on disk.
 - The hover title (`package@1.2.3`) was rendered as a `mailto:` link. `name@1.2.3` is a syntactically valid GFM extended email autolink — numeric domain labels are allowed, so `4.17.21` parses as one — and VS Code's hover renderer (`marked`) autolinks it accordingly unless it sits inside a code span. Verified directly against `marked`.
+
+## [0.1.1]
+
+- Fix some bugs.
 
 ## [0.1.0]
 
