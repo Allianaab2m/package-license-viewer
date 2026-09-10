@@ -64,12 +64,17 @@
         "packageLicenseViewer.format": {
           "type": "string",
           "default": "${license}",
-          "markdownDescription": "Template for the inline annotation. Placeholders: `${license}`, `${version}`, `${name}`, `${source}`."
+          "markdownDescription": "Template for the inline annotation. Placeholders: `${license}`, `${version}`, `${name}`, `${source}`, `${nodeEngine}`."
         },
         "packageLicenseViewer.showResolvedVersion": {
           "type": "boolean",
           "default": false,
           "description": "Append the actually resolved version to the annotation (e.g. \"MIT · 1.2.3\")."
+        },
+        "packageLicenseViewer.showNodeEngine": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Append the package's declared `engines.node` range to the annotation, when it has one (e.g. `MIT (Node: >=20)`)."
         },
         "packageLicenseViewer.unknownText": {
           "type": "string",

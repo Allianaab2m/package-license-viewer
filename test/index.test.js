@@ -581,7 +581,12 @@ test("lockfile: bun nests packages under a composite key", () => {
 
 // --- rendering --------------------------------------------------------------
 
-const BASE_CONFIG = { format: "${license}", showResolvedVersion: false, unknownText: "" };
+const BASE_CONFIG = {
+  format: "${license}",
+  showResolvedVersion: false,
+  showNodeEngine: true,
+  unknownText: "",
+};
 const ENTRY = { name: "lodash", spec: "^4", section: "dependencies", line: 0 };
 
 test("formatAnnotation renders the template", () => {
@@ -601,6 +606,38 @@ test("formatAnnotation renders the template", () => {
       source: "local",
     }),
     "MIT · 4.17.21"
+  );
+});
+
+// The inline annotation, not just the hover, should show engines.node when known (follow-up to #4).
+test('formatAnnotation appends engines.node, like axios: "^1.1.1" // MIT (Node: >=20)', () => {
+  assert.equal(
+    formatAnnotation(BASE_CONFIG, ENTRY, {
+      license: "MIT",
+      source: "registry",
+      nodeEngine: ">=20",
+    }),
+    "MIT (Node: >=20)"
+  );
+  // Nothing to append when the package doesn't declare one
+  assert.equal(formatAnnotation(BASE_CONFIG, ENTRY, { license: "MIT", source: "local" }), "MIT");
+  // The setting turns it off
+  assert.equal(
+    formatAnnotation({ ...BASE_CONFIG, showNodeEngine: false }, ENTRY, {
+      license: "MIT",
+      source: "local",
+      nodeEngine: ">=20",
+    }),
+    "MIT"
+  );
+  // A custom template that already places ${nodeEngine} isn't appended to twice
+  assert.equal(
+    formatAnnotation({ ...BASE_CONFIG, format: "${license} (node ${nodeEngine})" }, ENTRY, {
+      license: "MIT",
+      source: "local",
+      nodeEngine: ">=20",
+    }),
+    "MIT (node >=20)"
   );
 });
 

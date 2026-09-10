@@ -6,6 +6,7 @@ export interface ViewerConfig {
   enabled: boolean;
   format: string;
   showResolvedVersion: boolean;
+  showNodeEngine: boolean;
   unknownText: string;
   annotationColor: string;
   margin: string;
@@ -42,6 +43,7 @@ function readConfig(scope?: vscode.ConfigurationScope): ViewerConfig {
     enabled: c.get<boolean>("enabled", true),
     format: c.get<string>("format", "${license}"),
     showResolvedVersion: c.get<boolean>("showResolvedVersion", false),
+    showNodeEngine: c.get<boolean>("showNodeEngine", true),
     unknownText: c.get<string>("unknownText", ""),
     annotationColor: c.get<string>("annotationColor", "editorCodeLens.foreground"),
     margin: c.get<string>("margin", "0 0 0 1.5em"),

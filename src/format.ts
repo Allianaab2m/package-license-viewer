@@ -24,6 +24,7 @@ export function formatAnnotation(
     .replace(/\$\{version\}/g, info.version ?? "")
     .replace(/\$\{name\}/g, entry.name)
     .replace(/\$\{source\}/g, info.source)
+    .replace(/\$\{nodeEngine\}/g, info.nodeEngine ?? "")
     .trim();
 
   if (text.length === 0) {
@@ -32,6 +33,10 @@ export function formatAnnotation(
 
   if (config.showResolvedVersion && info.version && !config.format.includes("${version}")) {
     text = `${text} · ${info.version}`;
+  }
+
+  if (config.showNodeEngine && info.nodeEngine && !config.format.includes("${nodeEngine}")) {
+    text = `${text} (Node: ${info.nodeEngine})`;
   }
 
   // Decoration text cannot contain line breaks

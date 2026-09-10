@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.2.1]
+
+### Added
+
+- A package's declared `engines.node` range is now also appended to the inline annotation, not just shown in the hover, e.g. `MIT (Node: >=20)`. New `packageLicenseViewer.showNodeEngine` setting (default `true`) turns it off, and a new `${nodeEngine}` placeholder is available for `packageLicenseViewer.format` ([#4]).
+
 ## [0.2.0]
 
 ### Added
@@ -16,6 +22,11 @@
 [#2]: https://github.com/otoneko1102/package-license-viewer/issues/2
 [#3]: https://github.com/otoneko1102/package-license-viewer/issues/3
 [#4]: https://github.com/otoneko1102/package-license-viewer/issues/4
+
+## [0.1.3]
+
+- Miss.
+- Deprecated.
 
 ## [0.1.2]
 

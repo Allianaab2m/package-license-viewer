@@ -8,7 +8,8 @@ Shows the license of every dependency inline, dimmed at the end of the line.
   "dependencies": {
     "lodash": "^4.17.21",        // MIT
     "@babel/core": "^7.0.0",     // MIT
-    "left-pad": "1.3.0"          // WTFPL
+    "left-pad": "1.3.0",         // WTFPL
+    "axios": "^1.1.1"            // MIT (Node: >=20)
   },
   "devDependencies": {
     "typescript": "^5.7.2"       // Apache-2.0
@@ -26,7 +27,7 @@ Shows the license of every dependency inline, dimmed at the end of the line.
 }
 ```
 
-Hover an annotation to see the resolved version, where the information came from, a link to the package homepage, and (when the package declares one) its `engines.node` requirement.
+When a package declares an `engines.node` range, it's appended to the annotation too, as shown for `axios` above. Hover an annotation to see the resolved version, where the information came from, and a link to the package homepage.
 
 | Manifest | Sections read |
 | --- | --- |
@@ -74,8 +75,9 @@ Lockfile formats understood: `package-lock.json` (v1/v2/v3, including workspaces
 | Setting | Default | Description |
 | --- | --- | --- |
 | `packageLicenseViewer.enabled` | `true` | Show inline license annotations. |
-| `packageLicenseViewer.format` | `${license}` | Annotation template. Placeholders: `${license}`, `${version}`, `${name}`, `${source}`. |
+| `packageLicenseViewer.format` | `${license}` | Annotation template. Placeholders: `${license}`, `${version}`, `${name}`, `${source}`, `${nodeEngine}`. |
 | `packageLicenseViewer.showResolvedVersion` | `false` | Append the resolved version, e.g. `MIT · 4.17.21`. |
+| `packageLicenseViewer.showNodeEngine` | `true` | Append the package's `engines.node` range, when it has one, e.g. `MIT (Node: >=20)`. |
 | `packageLicenseViewer.unknownText` | `""` | Text shown when the license is unknown. Empty means show nothing. |
 | `packageLicenseViewer.annotationColor` | `editorCodeLens.foreground` | Theme color id, or a CSS color such as `#88888899`. |
 | `packageLicenseViewer.margin` | `0 0 0 1.5em` | CSS margin before the annotation. |
