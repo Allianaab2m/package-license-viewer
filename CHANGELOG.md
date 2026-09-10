@@ -5,6 +5,7 @@
 ### Added
 
 - `pnpm-workspace.yaml` is now annotated directly: the `catalog:` (default) and `catalogs:` (named) sections list the actual ranges a workspace catalog resolves to, and those get the same inline license annotation and hover as any other dependency ([#3]).
+- The hover now shows a package's declared `engines.node` range right after its license, when it has one ([#4]).
 
 ### Fixed
 
@@ -14,6 +15,7 @@
 [#1]: https://github.com/otoneko1102/package-license-viewer/issues/1
 [#2]: https://github.com/otoneko1102/package-license-viewer/issues/2
 [#3]: https://github.com/otoneko1102/package-license-viewer/issues/3
+[#4]: https://github.com/otoneko1102/package-license-viewer/issues/4
 
 ## [0.1.1]
 

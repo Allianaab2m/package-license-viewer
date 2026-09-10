@@ -3,13 +3,27 @@ import semver from "semver";
 import type { LicenseCache } from "../../cache";
 import { getSetting } from "../../config";
 import { NotFoundError, fetchJson } from "../../net";
-import { type NpmManifest, normalizeLicense } from "./manifest";
+import { type NpmManifest, normalizeLicense, normalizeNodeEngine } from "./manifest";
 import { encodePackageName } from "./spec";
 
 /** Abbreviated registry metadata. It has no license, so it is only good for picking a version. */
 interface AbbreviatedPackument {
   "dist-tags"?: Record<string, string>;
   versions?: Record<string, unknown>;
+}
+
+export interface FetchedManifest {
+  license?: string;
+  homepage?: string;
+  nodeEngine?: string;
+}
+
+function toFetchedManifest(manifest: NpmManifest): FetchedManifest {
+  return {
+    license: normalizeLicense(manifest),
+    homepage: manifest.homepage,
+    nodeEngine: normalizeNodeEngine(manifest),
+  };
 }
 
 /**
@@ -77,18 +91,19 @@ export class NpmRegistryClient {
     name: string,
     version: string,
     token: vscode.CancellationToken
-  ): Promise<{ license?: string; homepage?: string }> {
+  ): Promise<FetchedManifest> {
     const encoded = encodePackageName(name);
-    const cacheKey = `${this.namespace}:manifest:${encoded}@${version}`;
-    const cached = this.cache.get<{ license?: string; homepage?: string }>(cacheKey);
+    // Versioned so that adding a field to FetchedManifest (as nodeEngine was) can't be masked for up to a week by a still-fresh cache entry from before that field existed.
+    const cacheKey = `${this.namespace}:manifest:v2:${encoded}@${version}`;
+    const cached = this.cache.get<FetchedManifest>(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
 
-    let result: { license?: string; homepage?: string };
+    let result: FetchedManifest;
     try {
       const manifest = await fetchJson<NpmManifest>(`${this.baseUrl}/${encoded}/${version}`, token);
-      result = { license: normalizeLicense(manifest), homepage: manifest.homepage };
+      result = toFetchedManifest(manifest);
     } catch (error) {
       // Some registries have no single-version endpoint, so fall back to the full document
       if (!(error instanceof NotFoundError)) {
@@ -102,7 +117,7 @@ export class NpmRegistryClient {
       if (!manifest) {
         throw error;
       }
-      result = { license: normalizeLicense(manifest), homepage: manifest.homepage };
+      result = toFetchedManifest(manifest);
     }
 
     this.cache.set(cacheKey, result);

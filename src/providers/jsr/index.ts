@@ -86,12 +86,17 @@ export async function resolveViaNpmRegistry(
     if (!version) {
       return { source: "unknown", detail: `no published version matches "${spec}"` };
     }
-    const { license, homepage } = await client.fetchLicense(parsed.name, version, token);
+    const { license, homepage, nodeEngine } = await client.fetchLicense(
+      parsed.name,
+      version,
+      token
+    );
     return {
       license,
       version,
       source: "registry",
       homepage,
+      nodeEngine,
       registryPackageName: parsed.name,
       detail: license ? undefined : "the published package declares no license",
     };

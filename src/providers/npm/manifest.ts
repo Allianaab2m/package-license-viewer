@@ -8,6 +8,7 @@ export interface NpmManifest {
   homepage?: string;
   deprecated?: string;
   private?: boolean;
+  engines?: { node?: string };
 }
 
 /**
@@ -39,16 +40,28 @@ export function normalizeLicense(manifest: NpmManifest | undefined): string | un
   return undefined;
 }
 
+/** The `engines.node` range, e.g. `">=18.0.0"`, or undefined when the package doesn't declare one */
+export function normalizeNodeEngine(manifest: NpmManifest | undefined): string | undefined {
+  return trimToUndefined(manifest?.engines?.node);
+}
+
 function toLicenseString(
   value: string | { type?: string; url?: string } | undefined
 ): string | undefined {
   if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    return trimToUndefined(value);
   }
   if (value && typeof value === "object" && typeof value.type === "string") {
-    const trimmed = value.type.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    return trimToUndefined(value.type);
   }
   return undefined;
+}
+
+/** Trim a possibly-absent string, treating whitespace-only as absent too */
+function trimToUndefined(value: string | undefined): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }

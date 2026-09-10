@@ -8,7 +8,9 @@ const { test } = require("node:test");
 
 const OUT = path.join(__dirname, "..", "out");
 const { parseSpec, encodePackageName } = require(path.join(OUT, "providers/npm/spec.js"));
-const { normalizeLicense } = require(path.join(OUT, "providers/npm/manifest.js"));
+const { normalizeLicense, normalizeNodeEngine } = require(
+  path.join(OUT, "providers/npm/manifest.js")
+);
 const { parsePackageJson } = require(path.join(OUT, "providers/npm/parse.js"));
 const { parsePnpmWorkspaceYaml } = require(path.join(OUT, "providers/npm/pnpmWorkspace.js"));
 const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(
@@ -175,6 +177,36 @@ test("resolve() links a catalog: dependency resolved from node_modules to npmjs.
   }
 });
 
+// issue #4: an installed package's engines.node should reach the hover.
+test("resolve() surfaces engines.node from an installed package", async () => {
+  const originalReadFile = stub.workspace.fs.readFile;
+  stub.workspace.fs.readFile = async (uri) => {
+    if (uri.path === "/d:/project/node_modules/typescript/package.json") {
+      return Buffer.from(
+        JSON.stringify({
+          name: "typescript",
+          version: "5.6.3",
+          license: "Apache-2.0",
+          engines: { node: ">=14.17" },
+        })
+      );
+    }
+    throw new Error("not found");
+  };
+  try {
+    const provider = new NpmLicenseProvider(new LicenseCache(memoryMemento()));
+    const document = fakeDocument("{}", "d:/project/package.json");
+    const info = await provider.resolve(
+      { name: "typescript", spec: "^5.0.0", section: "dependencies", line: 0 },
+      document,
+      noCancel
+    );
+    assert.equal(info.nodeEngine, ">=14.17");
+  } finally {
+    stub.workspace.fs.readFile = originalReadFile;
+  }
+});
+
 test("encodePackageName encodes the scope separator", () => {
   assert.equal(encodePackageName("@babel/core"), "@babel%2fcore");
   assert.equal(encodePackageName("lodash"), "lodash");
@@ -193,6 +225,15 @@ test("normalizeLicense handles every historical shape", () => {
   assert.equal(normalizeLicense({ license: "  " }), undefined);
   assert.equal(normalizeLicense({}), undefined);
   assert.equal(normalizeLicense(undefined), undefined);
+});
+
+// issue #4: engines.node should surface in the hover, right after the license.
+test("normalizeNodeEngine reads engines.node", () => {
+  assert.equal(normalizeNodeEngine({ engines: { node: ">=18.0.0" } }), ">=18.0.0");
+  assert.equal(normalizeNodeEngine({ engines: { node: "  " } }), undefined);
+  assert.equal(normalizeNodeEngine({ engines: {} }), undefined);
+  assert.equal(normalizeNodeEngine({}), undefined);
+  assert.equal(normalizeNodeEngine(undefined), undefined);
 });
 
 // --- parsing package.json ---------------------------------------------------
@@ -656,4 +697,19 @@ test("buildHover leaves the title unlinked without a resolved version", () => {
     registryPackageName: "lodash",
   });
   assert.doesNotMatch(hover.value, /npmjs\.com/);
+});
+
+test("buildHover shows engines.node right after the license, when known", () => {
+  const hover = buildHover(ENTRY, {
+    license: "MIT",
+    version: "4.17.21",
+    source: "local",
+    nodeEngine: ">=18.0.0",
+  });
+  assert.match(hover.value, /License: `MIT`\n\nNode: `>=18\.0\.0`/);
+});
+
+test("buildHover omits the Node line when engines.node is unknown", () => {
+  const hover = buildHover(ENTRY, { license: "MIT", version: "4.17.21", source: "local" });
+  assert.doesNotMatch(hover.value, /Node:/);
 });

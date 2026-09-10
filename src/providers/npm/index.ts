@@ -12,7 +12,7 @@ import {
 import type { DependencyEntry, LicenseInfo, LicenseProvider } from "../types";
 import { InstalledPackageLookup } from "./installed";
 import { LockfileResolver } from "./lockfile";
-import { normalizeLicense } from "./manifest";
+import { normalizeLicense, normalizeNodeEngine } from "./manifest";
 import { parsePackageJson } from "./parse";
 import { parsePnpmWorkspaceYaml } from "./pnpmWorkspace";
 import { NpmRegistryClient } from "./registry";
@@ -115,6 +115,7 @@ export class NpmLicenseProvider implements LicenseProvider {
         semver.satisfies(version, parsed.spec, { loose: true, includePrerelease: true });
       if (satisfies) {
         const license = normalizeLicense(local.manifest);
+        const nodeEngine = normalizeNodeEngine(local.manifest);
         // Only a genuine, alias-resolved semver specifier is guaranteed to name a real npmjs.org package — not a JSR package (jsrId), and not a file:/workspace:/git dependency that merely happens to be linked locally. A catalog reference names a real npm package too, its version just comes from the workspace catalog.
         const registryPackageName =
           !jsrId && (parsed.kind === "range" || parsed.kind === "tag" || parsed.kind === "catalog")
@@ -126,6 +127,7 @@ export class NpmLicenseProvider implements LicenseProvider {
             version,
             source: "local",
             homepage: local.manifest.homepage,
+            nodeEngine,
             registryPackageName,
           };
         }
@@ -141,6 +143,7 @@ export class NpmLicenseProvider implements LicenseProvider {
             // Prefer the JSR page over whatever homepage node_modules happened to record — consistent with what a full JSR resolution returns, and it's what the hover title links to.
             homepage: packagePage,
             packagePageUrl: packagePage,
+            nodeEngine,
             detail: jsrLicense ? undefined : "the package declares no license on JSR",
           };
         }
@@ -148,6 +151,7 @@ export class NpmLicenseProvider implements LicenseProvider {
           version,
           source: "local",
           homepage: local.manifest.homepage,
+          nodeEngine,
           registryPackageName,
           detail: "no license field in the installed package.json",
         };
@@ -221,12 +225,17 @@ export class NpmLicenseProvider implements LicenseProvider {
     token: vscode.CancellationToken
   ): Promise<LicenseInfo | undefined> {
     try {
-      const { license, homepage } = await this.registry.fetchLicense(name, version, token);
+      const { license, homepage, nodeEngine } = await this.registry.fetchLicense(
+        name,
+        version,
+        token
+      );
       return {
         license,
         version,
         source: license ? "registry" : "lockfile",
         homepage,
+        nodeEngine,
         registryPackageName: name,
         detail: license ? undefined : "the published package declares no license",
       };

@@ -61,6 +61,10 @@ export function buildHover(
     lines.push("License: _unknown_");
   }
 
+  if (info.nodeEngine) {
+    lines.push(`Node: \`${info.nodeEngine}\``);
+  }
+
   lines.push(`Resolved from: ${describeSource(info)}`);
 
   // Skip a "Homepage" line that would just repeat the link the title already has (JSR has no separately declared homepage, so its package page serves as both).

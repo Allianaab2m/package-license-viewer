@@ -26,7 +26,7 @@ Shows the license of every dependency inline, dimmed at the end of the line.
 }
 ```
 
-Hover an annotation to see the resolved version, where the information came from, and a link to the package homepage.
+Hover an annotation to see the resolved version, where the information came from, a link to the package homepage, and (when the package declares one) its `engines.node` requirement.
 
 | Manifest | Sections read |
 | --- | --- |
