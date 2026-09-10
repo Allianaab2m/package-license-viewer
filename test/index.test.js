@@ -1,5 +1,5 @@
 // Load the vscode stub first, because the modules under test require it
-const { fakeDocument } = require("./vscode-stub");
+const { fakeDocument, stub } = require("./vscode-stub");
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -146,6 +146,32 @@ test("resolve() reports a catalog: reference as unknown, not skipped, when no lo
   );
   assert.equal(info.source, "unknown");
   assert.match(info.detail, /catalog/);
+});
+
+// The hover title lost its npmjs.org link for a catalog: dependency that resolves straight from node_modules (issue #2). registryPackageName has to be set on this path too, not just the lockfile path, since a catalog reference names a real npm package just as much as a plain semver range does.
+test("resolve() links a catalog: dependency resolved from node_modules to npmjs.org", async () => {
+  const originalReadFile = stub.workspace.fs.readFile;
+  stub.workspace.fs.readFile = async (uri) => {
+    if (uri.path === "/d:/project/node_modules/@types/node/package.json") {
+      return Buffer.from(
+        JSON.stringify({ name: "@types/node", version: "22.20.1", license: "MIT" })
+      );
+    }
+    throw new Error("not found");
+  };
+  try {
+    const provider = new NpmLicenseProvider(new LicenseCache(memoryMemento()));
+    const document = fakeDocument("{}", "d:/project/package.json");
+    const info = await provider.resolve(
+      { name: "@types/node", spec: "catalog:", section: "devDependencies", line: 0 },
+      document,
+      noCancel
+    );
+    assert.equal(info.license, "MIT");
+    assert.equal(info.registryPackageName, "@types/node");
+  } finally {
+    stub.workspace.fs.readFile = originalReadFile;
+  }
 });
 
 test("encodePackageName encodes the scope separator", () => {
