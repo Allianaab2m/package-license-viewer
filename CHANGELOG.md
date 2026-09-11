@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.2.2]
+
+- Fix some repository URLs.
+
 ## [0.2.1]
 
 ### Added
