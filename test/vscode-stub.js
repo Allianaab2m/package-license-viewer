@@ -173,6 +173,22 @@ function fakeEditor(document) {
       }
       return [...merged.values()];
     },
+    /** How many of the raw per-type decorations at this position carry a hoverMessage — VS Code shows one hover section per decoration sharing a range, so this must never exceed 1. */
+    hoverMessageCountAt(line, character) {
+      let count = 0;
+      for (const type of typeOrder) {
+        for (const option of decorationsByType.get(type) ?? []) {
+          if (
+            option.range.startLine === line &&
+            option.range.startCharacter === character &&
+            option.hoverMessage !== undefined
+          ) {
+            count++;
+          }
+        }
+      }
+      return count;
+    },
   };
 }
 

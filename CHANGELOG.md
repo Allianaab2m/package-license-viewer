@@ -1,5 +1,11 @@
 # Change Log
 
+## [Unreleased]
+
+### Fixed
+
+- Hovering an annotation could show the same tooltip content repeated two or three times. Splitting the license into its own color (0.3.0) draws it across up to four decorations sharing one position, and all of them ended up carrying the same hover message — VS Code shows one hover section per decoration at a given position, so it appeared once per piece instead of once overall.
+
 ## [0.3.0]
 
 ### Added

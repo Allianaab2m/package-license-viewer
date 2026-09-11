@@ -246,24 +246,39 @@ export class Annotator implements vscode.Disposable {
       const range = new vscode.Range(entry.line, endColumn, entry.line, endColumn);
       const hoverMessage = buildHover(entry, stored.info);
 
-      // The spacer alone carries the margin, so it is drawn even when before/after are empty.
-      options.spacer.push({ range, hoverMessage });
+      // All four decorations share the exact same range, so attaching the same hoverMessage to more than one of them makes VS Code show it once per decoration — one hover popup with the content repeated. Only the segment that actually carries the visible text gets it, preferring license (the common case) over before/after, and the spacer as a last resort for the rare case where all three are somehow empty.
+      const hoverTarget = segments.license
+        ? "license"
+        : segments.before
+          ? "before"
+          : segments.after
+            ? "after"
+            : "spacer";
+
+      options.spacer.push({
+        range,
+        hoverMessage: hoverTarget === "spacer" ? hoverMessage : undefined,
+      });
       if (segments.before) {
         options.before.push({
           range,
-          hoverMessage,
+          hoverMessage: hoverTarget === "before" ? hoverMessage : undefined,
           renderOptions: contentOptions(segments.before),
         });
       }
       if (segments.license) {
         options.license.push({
           range,
-          hoverMessage,
+          hoverMessage: hoverTarget === "license" ? hoverMessage : undefined,
           renderOptions: contentOptions(segments.license),
         });
       }
       if (segments.after) {
-        options.after.push({ range, hoverMessage, renderOptions: contentOptions(segments.after) });
+        options.after.push({
+          range,
+          hoverMessage: hoverTarget === "after" ? hoverMessage : undefined,
+          renderOptions: contentOptions(segments.after),
+        });
       }
     }
 

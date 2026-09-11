@@ -127,6 +127,31 @@ test("annotations land on the line of their dependency", async () => {
   annotator.dispose();
 });
 
+// The license is drawn in its own colour via a decoration split into spacer/before/license/after pieces that all share the same range (see annotator.ts). Attaching the same hoverMessage to more than one of them made the hover popup show the same content once per piece — reported as the popup looking "tripled".
+test("hovering an annotation shows the tooltip only once, even with several visible pieces", async () => {
+  const provider = new SlowProvider(0);
+  provider.resolve = async (entry) => {
+    provider.resolveCalls++;
+    return { license: "MIT", version: "1.0.0", source: "local", nodeEngine: ">=18" };
+  };
+  const { document, editor, annotator } = setup(provider);
+
+  annotator.refreshAll();
+  await sleep(300);
+
+  // With engines.node shown, both the `license` and `after` (" (Node: >=18)") pieces are drawn — exactly the shape that used to trigger the duplicate hover.
+  const decorations = editor.lastDecorations ?? [];
+  assert.equal(decorations.length, DEPENDENCY_COUNT);
+  for (const decoration of decorations) {
+    assert.equal(decoration.renderOptions.after.contentText, "MIT (Node: >=18)");
+    assert.equal(
+      editor.hoverMessageCountAt(decoration.range.startLine, decoration.range.startCharacter),
+      1
+    );
+  }
+  annotator.dispose();
+});
+
 test("results are reused on a later refresh rather than resolved again", async () => {
   const provider = new SlowProvider(0);
   const { annotator } = setup(provider);
