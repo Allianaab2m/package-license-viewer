@@ -3,7 +3,74 @@ import type { ViewerConfig } from "./config";
 import type { DependencyEntry, LicenseInfo } from "./providers";
 
 /**
- * Build the dimmed text drawn at the end of the line.
+ * The annotation split around the license value, so the caller can draw `license` in its own colour while `before`/`after` stay in the regular dimmed one. Either side is often empty — the default template (`${license}`) has nothing on either side at all.
+ */
+export interface AnnotationSegments {
+  readonly before: string;
+  readonly license: string;
+  readonly after: string;
+}
+
+/**
+ * Split the annotation around the license value. Returns undefined when nothing should be shown.
+
+ * Only the first `${license}` occurrence is split out; a template that doesn't reference `${license}` at all has nothing to colour, so everything lands in `before` instead.
+ */
+export function formatAnnotationSegments(
+  config: ViewerConfig,
+  entry: DependencyEntry,
+  info: LicenseInfo
+): AnnotationSegments | undefined {
+  if (!info.license) {
+    // Things we never meant to resolve (git dependencies and the like) stay quiet
+    if (info.source === "skipped") {
+      return undefined;
+    }
+    return config.unknownText.trim().length > 0
+      ? { before: stripBreaks(config.unknownText), license: "", after: "" }
+      : undefined;
+  }
+
+  const template = config.format
+    .replace(/\$\{version\}/g, info.version ?? "")
+    .replace(/\$\{name\}/g, entry.name)
+    .replace(/\$\{source\}/g, info.source)
+    .replace(/\$\{nodeEngine\}/g, info.nodeEngine ?? "");
+
+  const marker = "${license}";
+  const markerIndex = template.indexOf(marker);
+  const hasLicensePlaceholder = markerIndex !== -1;
+
+  const rawBefore = hasLicensePlaceholder ? template.slice(0, markerIndex) : template;
+  const license = hasLicensePlaceholder ? info.license : "";
+  // Only the first occurrence gets its own colour; a repeated ${license} still has to resolve to the actual value rather than being left in the text literally.
+  let after = hasLicensePlaceholder
+    ? template.slice(markerIndex + marker.length).replaceAll(marker, info.license)
+    : "";
+
+  if ((rawBefore + license + after).trim().length === 0) {
+    return undefined;
+  }
+
+  if (config.showResolvedVersion && info.version && !config.format.includes("${version}")) {
+    after += ` · ${info.version}`;
+  }
+
+  if (config.showNodeEngine && info.nodeEngine && !config.format.includes("${nodeEngine}")) {
+    after += ` (Node: ${info.nodeEngine})`;
+  }
+
+  // Trim only the outer edges — a leading/trailing space right next to the license value (as in "${name}: ${license}") is intentional and must survive.
+  const before = hasLicensePlaceholder ? rawBefore.trimStart() : rawBefore.trim();
+  if (hasLicensePlaceholder) {
+    after = after.trimEnd();
+  }
+
+  return { before: stripBreaks(before), license: stripBreaks(license), after: stripBreaks(after) };
+}
+
+/**
+ * Build the dimmed text drawn at the end of the line, as one plain string.
  * Returns undefined when nothing should be shown.
  */
 export function formatAnnotation(
@@ -11,35 +78,12 @@ export function formatAnnotation(
   entry: DependencyEntry,
   info: LicenseInfo
 ): string | undefined {
-  if (!info.license) {
-    // Things we never meant to resolve (git dependencies and the like) stay quiet
-    if (info.source === "skipped") {
-      return undefined;
-    }
-    return config.unknownText.trim().length > 0 ? config.unknownText : undefined;
-  }
+  const segments = formatAnnotationSegments(config, entry, info);
+  return segments ? `${segments.before}${segments.license}${segments.after}` : undefined;
+}
 
-  let text = config.format
-    .replace(/\$\{license\}/g, info.license)
-    .replace(/\$\{version\}/g, info.version ?? "")
-    .replace(/\$\{name\}/g, entry.name)
-    .replace(/\$\{source\}/g, info.source)
-    .replace(/\$\{nodeEngine\}/g, info.nodeEngine ?? "")
-    .trim();
-
-  if (text.length === 0) {
-    return undefined;
-  }
-
-  if (config.showResolvedVersion && info.version && !config.format.includes("${version}")) {
-    text = `${text} · ${info.version}`;
-  }
-
-  if (config.showNodeEngine && info.nodeEngine && !config.format.includes("${nodeEngine}")) {
-    text = `${text} (Node: ${info.nodeEngine})`;
-  }
-
-  // Decoration text cannot contain line breaks
+// Decoration text cannot contain line breaks
+function stripBreaks(text: string): string {
   return text.replace(/\s*\r?\n\s*/g, " ");
 }
 

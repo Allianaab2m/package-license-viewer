@@ -86,6 +86,11 @@
           "default": "editorCodeLens.foreground",
           "markdownDescription": "Theme color id used for the annotation (e.g. `editorCodeLens.foreground`, `descriptionForeground`), or a CSS color such as `#88888899`."
         },
+        "packageLicenseViewer.licenseColor": {
+          "type": "string",
+          "default": "charts.green",
+          "markdownDescription": "Theme color id used for just the license part of the annotation (e.g. `charts.green`, `textLink.foreground`), or a CSS color such as `#4ec9b0`. Everything else keeps using `annotationColor`."
+        },
         "packageLicenseViewer.margin": {
           "type": "string",
           "default": "0 0 0 1.5em",

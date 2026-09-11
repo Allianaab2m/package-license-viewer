@@ -9,6 +9,7 @@ export interface ViewerConfig {
   showNodeEngine: boolean;
   unknownText: string;
   annotationColor: string;
+  licenseColor: string;
   margin: string;
   cacheTtlHours: number;
   requestTimeoutMs: number;
@@ -46,6 +47,7 @@ function readConfig(scope?: vscode.ConfigurationScope): ViewerConfig {
     showNodeEngine: c.get<boolean>("showNodeEngine", true),
     unknownText: c.get<string>("unknownText", ""),
     annotationColor: c.get<string>("annotationColor", "editorCodeLens.foreground"),
+    licenseColor: c.get<string>("licenseColor", "charts.green"),
     margin: c.get<string>("margin", "0 0 0 1.5em"),
     cacheTtlHours: c.get<number>("cacheTtlHours", 168),
     requestTimeoutMs: c.get<number>("requestTimeoutMs", 8000),

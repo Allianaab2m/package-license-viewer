@@ -1,6 +1,6 @@
 # Package License Viewer
 
-Shows the license of every dependency inline, dimmed at the end of the line.
+Shows the license of every dependency inline at the end of the line, with the license itself colored so it stands out at a glance.
 
 ```jsonc
 // package.json
@@ -79,7 +79,8 @@ Lockfile formats understood: `package-lock.json` (v1/v2/v3, including workspaces
 | `packageLicenseViewer.showResolvedVersion` | `false` | Append the resolved version, e.g. `MIT · 4.17.21`. |
 | `packageLicenseViewer.showNodeEngine` | `true` | Append the package's `engines.node` range, when it has one, e.g. `MIT (Node: >=20)`. |
 | `packageLicenseViewer.unknownText` | `""` | Text shown when the license is unknown. Empty means show nothing. |
-| `packageLicenseViewer.annotationColor` | `editorCodeLens.foreground` | Theme color id, or a CSS color such as `#88888899`. |
+| `packageLicenseViewer.annotationColor` | `editorCodeLens.foreground` | Theme color id, or a CSS color such as `#88888899`, for everything except the license itself. |
+| `packageLicenseViewer.licenseColor` | `charts.green` | Theme color id, or a CSS color, used for just the license part of the annotation. |
 | `packageLicenseViewer.margin` | `0 0 0 1.5em` | CSS margin before the annotation. |
 | `packageLicenseViewer.cacheTtlHours` | `168` | Lifetime of cached registry results. `0` disables the on-disk cache. |
 | `packageLicenseViewer.requestTimeoutMs` | `8000` | Timeout of a single registry request. |

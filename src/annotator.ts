@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { getConfig } from "./config";
-import { buildHover, formatAnnotation } from "./format";
+import { buildHover, formatAnnotationSegments } from "./format";
 import { log } from "./log";
 import { runWithConcurrency } from "./net";
 import {
@@ -32,9 +32,13 @@ interface StoredResult {
   info: LicenseInfo;
 }
 
-/** Draws the dimmed license at the end of each dependency line. */
+/**
+ * Draws the license at the end of each dependency line.
+
+ * The annotation is split across four decoration types sharing the exact same zero-width range (there is nothing after the end of a line to anchor a second position on) so the license value can be drawn in its own colour: an invisible `spacer` that carries the margin between the code and the annotation, `before`/`after` for whatever surrounds the license in the template (empty for the default `${license}` template), and `license` itself. All four are created once, in this fixed order, so their left-to-right render order stays stable.
+ */
 export class Annotator implements vscode.Disposable {
-  private decorationType: vscode.TextEditorDecorationType;
+  private decorationTypes: AnnotationDecorationTypes;
   private readonly results = new Map<string, StoredResult>();
   private readonly inflight = new Map<string, Promise<LicenseInfo>>();
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
@@ -42,7 +46,7 @@ export class Annotator implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(private readonly providers: readonly LicenseProvider[]) {
-    this.decorationType = createDecorationType();
+    this.decorationTypes = createDecorationTypes();
 
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -82,10 +86,12 @@ export class Annotator implements vscode.Disposable {
     }
   }
 
-  /** Rebuild the decoration style after a colour or spacing setting changed */
+  /** Rebuild the decoration styles after a colour or spacing setting changed */
   recreateDecorationType(): void {
-    this.decorationType.dispose();
-    this.decorationType = createDecorationType();
+    for (const type of Object.values(this.decorationTypes)) {
+      type.dispose();
+    }
+    this.decorationTypes = createDecorationTypes();
   }
 
   private schedule(document: vscode.TextDocument, immediate: boolean): void {
@@ -113,7 +119,7 @@ export class Annotator implements vscode.Disposable {
     const config = getConfig(document);
     const provider = config.enabled ? findProvider(this.providers, document) : undefined;
     if (!provider) {
-      this.setDecorations(editors, []);
+      this.setDecorations(editors, emptyAnnotationOptions());
       return;
     }
 
@@ -126,7 +132,7 @@ export class Annotator implements vscode.Disposable {
       entries = provider.parse(document);
     } catch (error) {
       log.warn(`parse failed for ${key}: ${String(error)}`);
-      this.setDecorations(editors, []);
+      this.setDecorations(editors, emptyAnnotationOptions());
       return;
     }
 
@@ -222,37 +228,54 @@ export class Annotator implements vscode.Disposable {
     entries: readonly DependencyEntry[]
   ): void {
     const config = getConfig(document);
-    const options: vscode.DecorationOptions[] = [];
+    const options = emptyAnnotationOptions();
 
     for (const entry of entries) {
       const stored = this.results.get(this.keyOf(provider, entry));
       if (!stored) {
         continue;
       }
-      const text = formatAnnotation(config, entry, stored.info);
-      if (!text) {
+      const segments = formatAnnotationSegments(config, entry, stored.info);
+      if (!segments) {
         continue;
       }
       if (entry.line < 0 || entry.line >= document.lineCount) {
         continue;
       }
       const endColumn = document.lineAt(entry.line).text.length;
-      options.push({
-        range: new vscode.Range(entry.line, endColumn, entry.line, endColumn),
-        renderOptions: { after: { contentText: text } },
-        hoverMessage: buildHover(entry, stored.info),
-      });
+      const range = new vscode.Range(entry.line, endColumn, entry.line, endColumn);
+      const hoverMessage = buildHover(entry, stored.info);
+
+      // The spacer alone carries the margin, so it is drawn even when before/after are empty.
+      options.spacer.push({ range, hoverMessage });
+      if (segments.before) {
+        options.before.push({
+          range,
+          hoverMessage,
+          renderOptions: contentOptions(segments.before),
+        });
+      }
+      if (segments.license) {
+        options.license.push({
+          range,
+          hoverMessage,
+          renderOptions: contentOptions(segments.license),
+        });
+      }
+      if (segments.after) {
+        options.after.push({ range, hoverMessage, renderOptions: contentOptions(segments.after) });
+      }
     }
 
     this.setDecorations(editors, options);
   }
 
-  private setDecorations(
-    editors: readonly vscode.TextEditor[],
-    options: vscode.DecorationOptions[]
-  ): void {
+  private setDecorations(editors: readonly vscode.TextEditor[], options: AnnotationOptions): void {
     for (const editor of editors) {
-      editor.setDecorations(this.decorationType, options);
+      editor.setDecorations(this.decorationTypes.spacer, options.spacer);
+      editor.setDecorations(this.decorationTypes.before, options.before);
+      editor.setDecorations(this.decorationTypes.license, options.license);
+      editor.setDecorations(this.decorationTypes.after, options.after);
     }
   }
 
@@ -279,24 +302,65 @@ export class Annotator implements vscode.Disposable {
     for (const key of [...this.cancellations.keys()]) {
       this.cancel(key);
     }
-    this.decorationType.dispose();
+    for (const type of Object.values(this.decorationTypes)) {
+      type.dispose();
+    }
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
   }
 }
 
-function createDecorationType(): vscode.TextEditorDecorationType {
+interface AnnotationDecorationTypes {
+  /** Invisible; carries the margin between the code and wherever the visible text starts */
+  readonly spacer: vscode.TextEditorDecorationType;
+  readonly before: vscode.TextEditorDecorationType;
+  readonly license: vscode.TextEditorDecorationType;
+  readonly after: vscode.TextEditorDecorationType;
+}
+
+interface AnnotationOptions {
+  readonly spacer: vscode.DecorationOptions[];
+  readonly before: vscode.DecorationOptions[];
+  readonly license: vscode.DecorationOptions[];
+  readonly after: vscode.DecorationOptions[];
+}
+
+function emptyAnnotationOptions(): AnnotationOptions {
+  return { spacer: [], before: [], license: [], after: [] };
+}
+
+function contentOptions(contentText: string): vscode.DecorationInstanceRenderOptions {
+  return { after: { contentText } };
+}
+
+/**
+ * Four decoration types sharing one visual line of text: `spacer` supplies the margin (with no content of its own, so it renders even when before/after are empty), `before`/`after` share `annotationColor`, and `license` gets its own `licenseColor`. Created in this fixed order so that whichever of before/license/after actually has content each render still lines up left-to-right in template order.
+ */
+function createDecorationTypes(): AnnotationDecorationTypes {
   const config = getConfig();
-  return vscode.window.createTextEditorDecorationType({
+  const base: vscode.DecorationRenderOptions = {
     isWholeLine: false,
     rangeBehavior: vscode.DecorationRangeBehavior.ClosedOpen,
-    after: {
-      margin: config.margin,
-      color: resolveColor(config.annotationColor),
-      fontStyle: "italic",
-    },
-  });
+  };
+  return {
+    spacer: vscode.window.createTextEditorDecorationType({
+      ...base,
+      after: { contentText: "", margin: config.margin },
+    }),
+    before: vscode.window.createTextEditorDecorationType({
+      ...base,
+      after: { margin: "0", color: resolveColor(config.annotationColor), fontStyle: "italic" },
+    }),
+    license: vscode.window.createTextEditorDecorationType({
+      ...base,
+      after: { margin: "0", color: resolveColor(config.licenseColor), fontStyle: "italic" },
+    }),
+    after: vscode.window.createTextEditorDecorationType({
+      ...base,
+      after: { margin: "0", color: resolveColor(config.annotationColor), fontStyle: "italic" },
+    }),
+  };
 }
 
 /** Accepts either a theme colour id or a plain CSS colour */

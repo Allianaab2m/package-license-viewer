@@ -1,5 +1,11 @@
 # Change Log
 
+## [Unreleased]
+
+### Added
+
+- The license part of the annotation is now drawn in its own color (`charts.green` by default) instead of the same dimmed color as the rest of the line, so it stands out at a glance. New `packageLicenseViewer.licenseColor` setting controls it independently of `packageLicenseViewer.annotationColor`, which now covers everything else (the version, source, and `Node: ...` text).
+
 ## [0.2.2]
 
 - Fix some repository URLs.

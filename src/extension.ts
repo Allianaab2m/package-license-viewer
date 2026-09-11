@@ -42,6 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
       invalidateConfigCache();
       if (
         event.affectsConfiguration(`${CONFIG_SECTION}.annotationColor`) ||
+        event.affectsConfiguration(`${CONFIG_SECTION}.licenseColor`) ||
         event.affectsConfiguration(`${CONFIG_SECTION}.margin`)
       ) {
         annotator.recreateDecorationType();

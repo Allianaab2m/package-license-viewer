@@ -135,17 +135,43 @@ function fakeDocument(text, fsPath = "d:/project/package.json") {
 
 /**
  * An editor that records every setDecorations call, so tests can assert on what would actually have been drawn.
+
+ * The annotator now spreads one annotation across several decoration types sharing the same range (spacer/before/license/after — see annotator.ts), each contributing its own slice of the `after.contentText`. `lastDecorations` merges the most recent call for every type back into one entry per range, in first-seen type order, so tests can keep asserting on "what the user would actually see" without knowing about the internal split.
  */
 function fakeEditor(document) {
-  const calls = [];
+  const decorationsByType = new Map();
+  const typeOrder = [];
   return {
     document,
-    calls,
-    get lastDecorations() {
-      return calls.length > 0 ? calls[calls.length - 1] : undefined;
+    setDecorations(type, options) {
+      if (!decorationsByType.has(type)) {
+        typeOrder.push(type);
+      }
+      decorationsByType.set(type, options);
     },
-    setDecorations(_type, options) {
-      calls.push(options);
+    get lastDecorations() {
+      if (typeOrder.length === 0) {
+        return undefined;
+      }
+      const merged = new Map();
+      for (const type of typeOrder) {
+        for (const option of decorationsByType.get(type) ?? []) {
+          const key = `${option.range.startLine}:${option.range.startCharacter}`;
+          const text = option.renderOptions?.after?.contentText ?? "";
+          const existing = merged.get(key);
+          if (existing) {
+            existing.renderOptions.after.contentText += text;
+            existing.hoverMessage ??= option.hoverMessage;
+          } else {
+            merged.set(key, {
+              range: option.range,
+              hoverMessage: option.hoverMessage,
+              renderOptions: { after: { contentText: text } },
+            });
+          }
+        }
+      }
+      return [...merged.values()];
     },
   };
 }

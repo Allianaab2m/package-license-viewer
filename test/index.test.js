@@ -19,7 +19,9 @@ const { parseDenoManifest, parseDenoSpecifier, isDenoManifest } = require(
 const { parseJsrPackageName, parseJsrNpmCompatName } = require(
   path.join(OUT, "providers/jsr/client.js")
 );
-const { formatAnnotation, buildHover } = require(path.join(OUT, "format.js"));
+const { formatAnnotation, formatAnnotationSegments, buildHover } = require(
+  path.join(OUT, "format.js")
+);
 const lock = require(path.join(OUT, "providers/npm/lockfile/parsers.js"));
 const { LicenseCache } = require(path.join(OUT, "cache.js"));
 const { NpmLicenseProvider } = require(path.join(OUT, "providers/npm/index.js"));
@@ -651,6 +653,61 @@ test("formatAnnotation stays silent when there is nothing useful to say", () => 
   assert.equal(
     formatAnnotation({ ...BASE_CONFIG, unknownText: "?" }, ENTRY, { source: "unknown" }),
     "?"
+  );
+});
+
+// The license is drawn in its own colour, so formatAnnotationSegments splits it out from whatever surrounds it in the template instead of returning one flat string.
+test("formatAnnotationSegments splits the license out from the rest of the template", () => {
+  // The default template is the license and nothing else
+  assert.deepEqual(
+    formatAnnotationSegments(BASE_CONFIG, ENTRY, { license: "MIT", source: "local" }),
+    { before: "", license: "MIT", after: "" }
+  );
+
+  // Literal text before/after ${license} stays in before/after, not license
+  assert.deepEqual(
+    formatAnnotationSegments({ ...BASE_CONFIG, format: "${name}: ${license} v${version}" }, ENTRY, {
+      license: "MIT",
+      version: "4.17.21",
+      source: "local",
+    }),
+    { before: "lodash: ", license: "MIT", after: " v4.17.21" }
+  );
+
+  // Appended version/nodeEngine text lands in `after`, alongside the license itself
+  assert.deepEqual(
+    formatAnnotationSegments(
+      { ...BASE_CONFIG, showResolvedVersion: true, showNodeEngine: true },
+      ENTRY,
+      { license: "MIT", version: "4.17.21", source: "local", nodeEngine: ">=20" }
+    ),
+    { before: "", license: "MIT", after: " · 4.17.21 (Node: >=20)" }
+  );
+
+  // A template without ${license} at all has nothing to colour — everything is `before`
+  assert.deepEqual(
+    formatAnnotationSegments({ ...BASE_CONFIG, format: "${name}" }, ENTRY, {
+      license: "MIT",
+      source: "local",
+    }),
+    { before: "lodash", license: "", after: "" }
+  );
+
+  // A repeated ${license} still has to resolve to the actual value — only the first occurrence gets its own colour, but the second must not be left as literal, unresolved text.
+  assert.deepEqual(
+    formatAnnotationSegments({ ...BASE_CONFIG, format: "${license} / ${license}" }, ENTRY, {
+      license: "MIT",
+      source: "local",
+    }),
+    { before: "", license: "MIT", after: " / MIT" }
+  );
+
+  // Concatenating the three segments must always equal what formatAnnotation itself returns
+  const info = { license: "MIT", version: "4.17.21", source: "local", nodeEngine: ">=20" };
+  const segments = formatAnnotationSegments(BASE_CONFIG, ENTRY, info);
+  assert.equal(
+    `${segments.before}${segments.license}${segments.after}`,
+    formatAnnotation(BASE_CONFIG, ENTRY, info)
   );
 });
 
