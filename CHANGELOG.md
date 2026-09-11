@@ -18,10 +18,10 @@
 - pnpm workspace catalog dependencies (`"typescript": "catalog:"`, or a named catalog such as `"catalog:build"`) never resolved: the specifier was misclassified the same way as `file:`/`workspace:`/git dependencies and skipped before ever reaching the lockfile, even though `pnpm-lock.yaml`'s `importers` section records exactly what a catalog reference resolved to. It is now read from there like any other pinned version ([#1], reported by [@otnc](https://github.com/otnc)).
 - A `catalog:` dependency resolved straight from an installed `node_modules` package (rather than through the lockfile) lost its hover link to npmjs.org, because `registryPackageName` was only ever set on the lockfile path ([#2], reported by [@otnc](https://github.com/otnc)).
 
-[#1]: https://github.com/otoneko1102/package-license-viewer/issues/1
-[#2]: https://github.com/otoneko1102/package-license-viewer/issues/2
-[#3]: https://github.com/otoneko1102/package-license-viewer/issues/3
-[#4]: https://github.com/otoneko1102/package-license-viewer/issues/4
+[#1]: https://github.com/otnc/package-license-viewer/issues/1
+[#2]: https://github.com/otnc/package-license-viewer/issues/2
+[#3]: https://github.com/otnc/package-license-viewer/issues/3
+[#4]: https://github.com/otnc/package-license-viewer/issues/4
 
 ## [0.1.3]
 

@@ -27,10 +27,10 @@
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/otoneko1102/package-license-viewer.git"
+    "url": "https://github.com/otnc/package-license-viewer.git"
   },
   "bugs": {
-    "url": "https://github.com/otoneko1102/package-license-viewer/issues"
+    "url": "https://github.com/otnc/package-license-viewer/issues"
   },
   "main": "./dist/extension.js",
   "activationEvents": [
