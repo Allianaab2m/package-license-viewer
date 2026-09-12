@@ -1,12 +1,384 @@
-require("./vscode-stub");
+const { fakeDocument, stub, fakeEditor, setVisibleEditors } = require("./vscode-stub");
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const { parseManifest, dependencySpec } = require("../out/providers/crates/parse");
 const {
   parseRequirement,
   matchesRequirement,
   compareVersions,
 } = require("../out/providers/crates/spec");
+const { CratesLicenseProvider } = require("../out/providers/crates");
+const { CratesClient, CratesRateLimiter } = require("../out/providers/crates/client");
+const { selectLocked } = require("../out/providers/crates/lockfile");
+const { LicenseCache } = require("../out/cache");
+const { buildHover } = require("../out/format");
+const { Annotator } = require("../out/annotator");
+const noCancel = {
+  isCancellationRequested: false,
+  onCancellationRequested: () => ({ dispose() {} }),
+};
+function makeCache() {
+  return new LicenseCache({ get() {}, async update() {} });
+}
+const lockText = (packages) =>
+  "version = 4\n" +
+  packages
+    .map(
+      ([name, version, source = "registry+https://github.com/rust-lang/crates.io-index"]) =>
+        `[[package]]\nname="${name}"\nversion="${version}"\n${source ? `source="${source}"` : ""}\n`
+    )
+    .join("");
+const apiVersion = (num, extra = {}) => ({
+  crate: "real",
+  num,
+  license: "MIT OR Apache-2.0",
+  yanked: false,
+  ...extra,
+});
+const settle = async () => {
+  for (let i = 0; i < 40; i++) await Promise.resolve();
+};
+
+test("Cargo requirements match the generated Rust semver 1.0.27 oracle", () => {
+  const rows = fs
+    .readFileSync(path.join(__dirname, "fixtures/lockfiles/cargo-versionreq.tsv"), "utf8")
+    .replace(/^\uFEFF/, "")
+    .trimEnd()
+    .split(/\r?\n/);
+  for (const row of rows) {
+    const fields = row.split("\t");
+    const expected = fields.pop();
+    const v = fields.pop();
+    const req = fields.join("\t");
+    const parsed = parseRequirement(req);
+    const result = parsed.kind === "invalid" ? "invalid" : String(matchesRequirement(parsed, v));
+    assert.equal(result, expected, JSON.stringify([req, v]));
+  }
+  const locked = fs
+    .readFileSync(path.join(__dirname, "fixtures/lockfiles/cargo.Cargo.lock"), "utf8")
+    .replace(/^\uFEFF/, "");
+  assert.deepEqual(selectLocked(locked, "semver", parseRequirement("1")), {
+    kind: "selected",
+    version: "1.0.27",
+  });
+});
+
+test("Cargo.lock validates every candidate's requirement and source", () => {
+  const req = parseRequirement("1");
+  for (const packages of [
+    [["real", "2.0.0"]],
+    [["real", "1.0.0", "git+https://example.com"]],
+    [["real", "1.0.0", ""]],
+    [["real", "1.0.0", "registry+https://private/index"]],
+    [
+      ["real", "1.0.0"],
+      ["real", "1.1.0"],
+    ],
+  ])
+    assert.equal(selectLocked(lockText(packages), "real", req).kind, "fallback");
+  assert.deepEqual(
+    selectLocked(
+      lockText([
+        ["real", "1.0.0"],
+        ["real", "2.0.0"],
+      ]),
+      "real",
+      req
+    ),
+    { kind: "selected", version: "1.0.0" }
+  );
+  assert.equal(selectLocked("not toml", "real", req).kind, "fallback");
+});
+
+test("Cargo provider inherits at the nearest root, isolates cache keys, and never sends excluded names", async (t) => {
+  const files = new Map();
+  t.mock.method(stub.workspace.fs, "readFile", async (uri) => {
+    if (!files.has(uri.path)) throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+    return Buffer.from(files.get(uri.path));
+  });
+  const calls = [];
+  t.mock.method(global, "fetch", async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      json: async () => ({ version: apiVersion("1.0.0", { license: null, yanked: true }) }),
+    };
+  });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const provider = new CratesLicenseProvider(cache);
+  const doc = (text, path = "/root/member/Cargo.toml") => fakeDocument(text, path);
+  const resolve = (d) => provider.resolve(provider.parse(d)[0], d, noCancel);
+  files.set(
+    "/root/Cargo.toml",
+    '[workspace]\n[workspace.dependencies]\nalias={package="real",version="1"}\n[patch.crates-io]\nother={path="local"}'
+  );
+  files.set("/root/Cargo.lock", lockText([["real", "1.0.0"]]));
+  let document = doc("[dependencies]\nalias.workspace=true");
+  const info = await resolve(document);
+  assert.equal(info.version, "1.0.0");
+  assert.equal(info.license, undefined);
+  assert.equal(info.source, "registry");
+  assert.match(info.via, /Cargo.lock/);
+  assert.equal(calls.length, 1, "missing locked license must not trigger a range lookup");
+  assert.match(
+    buildHover(provider.parse(document)[0], info).value,
+    /https:\/\/crates.io\/crates\/real\/1.0.0/
+  );
+  const key = provider.cacheKey(provider.parse(document)[0]);
+  assert.notEqual(
+    key,
+    provider.cacheKey(provider.parse(doc(document.getText(), "/another/Cargo.toml"))[0])
+  );
+  assert.equal(key, provider.cacheKey(provider.parse(doc("\n" + document.getText()))[0]));
+  assert.notEqual(
+    key,
+    provider.cacheKey(provider.parse(doc('[dependencies]\nalias={path="private",version="1"}'))[0])
+  );
+  for (const field of ["path", "git", "registry", "registry-index"])
+    assert.equal(
+      (await resolve(doc(`[dependencies]\nprivate={${field}="secret",version="1"}`))).source,
+      "skipped"
+    );
+  assert.equal((await resolve(doc('[dependencies]\nother="1"'))).source, "skipped");
+  files.set(
+    "/root/nested/Cargo.toml",
+    '[workspace]\n[workspace.dependencies]\nalias={git="private"}'
+  );
+  assert.equal(
+    (await resolve(doc(document.getText(), "/root/nested/member/Cargo.toml"))).source,
+    "skipped"
+  );
+  assert.equal(
+    (await resolve(doc('[package]\nworkspace="missing"\n[dependencies]\na="1"'))).source,
+    "unknown"
+  );
+  assert.equal((await resolve(doc("[dependencies]\nmissing.workspace=true"))).source, "unknown");
+  // A member patch is ignored; only the effective root patch suppresses a public dependency.
+  document = doc('[dependencies]\nalias.workspace=true\n[patch.crates-io]\nreal={path="local"}');
+  assert.equal((await resolve(document)).source, "registry");
+  files.set(
+    "/root/Cargo.toml",
+    '[workspace]\n[workspace.dependencies]\nalias={package="real",version="1"}\n[patch.crates-io]\nrenamed={package="real",path="local"}'
+  );
+  assert.equal(
+    (await resolve(document)).source,
+    "registry",
+    "auxiliary reads are cached until Refresh/TTL"
+  );
+  provider.invalidate();
+  assert.equal((await resolve(document)).source, "skipped");
+  assert.equal(calls.length, 1);
+});
+
+test("Cargo client validates complete lists, caches exact metadata and handles failures and cancellation", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() + 100_000 });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const client = new CratesClient(cache);
+  let enabled = true,
+    response = {
+      versions: [
+        apiVersion("1.0.0"),
+        apiVersion("1.9.0", { yanked: true }),
+        apiVersion("1.2.0", { license: null }),
+      ],
+      meta: { next_page: null },
+    };
+  let status = 200;
+  const starts = [];
+  t.mock.method(stub.workspace, "getConfiguration", () => ({
+    get: (key, fallback) => (key === "crates.useRegistry" ? enabled : fallback),
+  }));
+  t.mock.method(global, "fetch", async (url, options) => {
+    starts.push([Date.now(), url]);
+    assert.equal(options.headers["User-Agent"], "vscode-package-license-viewer");
+    return { ok: status === 200, status, json: async () => response };
+  });
+  async function run(promise) {
+    await settle();
+    t.mock.timers.tick(61_000);
+    await settle();
+    return promise;
+  }
+  const req = parseRequirement("1");
+  const [a, b] = await run(
+    Promise.all([
+      client.metadata("real", req, undefined, noCancel),
+      client.metadata("real", req, undefined, noCancel),
+    ])
+  );
+  assert.deepEqual(a, b);
+  assert.equal(a.metadata.version, "1.2.0");
+  assert.equal(a.metadata.license, undefined);
+  assert.equal(starts.length, 1);
+  assert.match(starts[0][1], /\/versions$/);
+  assert.equal((await client.metadata("real", req, "1.2.0", noCancel)).kind, "found");
+  enabled = false;
+  assert.equal((await client.metadata("real", req, undefined, noCancel)).kind, "found");
+  assert.equal((await client.metadata("private", req, undefined, noCancel)).kind, "unknown");
+  assert.equal(starts.length, 1);
+  enabled = true;
+  cache.clear();
+  response = { versions: [apiVersion("1.0.0")], meta: { next_page: "?seek=next" } };
+  assert.equal((await run(client.metadata("real", req, undefined, noCancel))).kind, "unknown");
+  response = { versions: [apiVersion("1.0.0", { crate: "wrong" })] };
+  assert.equal((await run(client.metadata("real", req, undefined, noCancel))).kind, "unknown");
+  for (const failure of [404, 500, 429]) {
+    status = failure;
+    assert.equal((await run(client.metadata("real", req, undefined, noCancel))).kind, "unknown");
+  }
+  status = 200;
+  response = { versions: [apiVersion("1.0.0")] };
+  const count = starts.length;
+  const cancelled = new stub.CancellationTokenSource();
+  const pending = client.metadata("real", req, undefined, cancelled.token);
+  cancelled.cancel();
+  assert.equal((await run(pending)).kind, "unknown");
+  assert.equal(starts.length, count);
+  const first = new stub.CancellationTokenSource();
+  const p1 = client.metadata("real", req, undefined, first.token);
+  const p2 = client.metadata("real", req, undefined, noCancel);
+  first.cancel();
+  const results = await run(Promise.all([p1, p2]));
+  assert.equal(results[0].kind, "unknown");
+  assert.equal(results[1].kind, "found");
+  assert.equal(starts.length, count + 1);
+  for (let i = 1; i < starts.length; i++) assert.ok(starts[i][0] - starts[i - 1][0] >= 1000);
+});
+
+test("Cargo rate limiter spaces actual starts, skips queued cancellation and checks disabled settings", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1000 });
+  const limiter = new CratesRateLimiter();
+  const starts = [];
+  const send = async () => {
+    starts.push(Date.now());
+    return true;
+  };
+  await limiter.run(noCancel, send);
+  const cts = new stub.CancellationTokenSource();
+  const cancelled = limiter.run(cts.token, send).catch(() => false);
+  const next = limiter.run(noCancel, send);
+  await settle();
+  cts.cancel();
+  await settle();
+  t.mock.timers.tick(999);
+  await settle();
+  assert.equal(starts.length, 1);
+  t.mock.timers.tick(1);
+  await settle();
+  await next;
+  assert.equal(await cancelled, false);
+  assert.deepEqual(starts, [1000, 2000]);
+  const blocked = limiter.run(noCancel, send).catch(() => false);
+  await settle();
+  t.mock.method(stub.workspace, "getConfiguration", () => ({
+    get: (key, fallback) => (key === "crates.useRegistry" ? false : fallback),
+  }));
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(await blocked, false);
+  assert.equal(starts.length, 2);
+});
+
+test("Cargo timeout and Refresh never persist transient failures or stale in-flight metadata", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() + 10_000_000 });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const client = new CratesClient(cache);
+  let calls = 0;
+  t.mock.method(global, "fetch", async (_url, options) => {
+    calls++;
+    return new Promise((_resolve, reject) =>
+      options.signal.addEventListener("abort", () => reject(options.signal.reason))
+    );
+  });
+  const pending = client.metadata("real", parseRequirement("1"), "1.0.0", noCancel);
+  await settle();
+  t.mock.timers.tick(8000);
+  await settle();
+  assert.equal((await pending).kind, "unknown");
+  assert.equal(cache.get("crates:metadata:v1:real@1.0.0"), undefined);
+  const refreshed = client.metadata("real", parseRequirement("1"), "1.0.0", noCancel);
+  await settle();
+  client.invalidate();
+  await settle();
+  assert.equal((await refreshed).kind, "unknown");
+  assert.equal(calls, 2);
+  assert.equal(cache.get("crates:metadata:v1:real@1.0.0"), undefined);
+});
+
+test("Cargo explicit workspace roots and separate lockfiles use distinct public metadata", async (t) => {
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  for (const version of ["1.0.0", "1.1.0"])
+    cache.set(`crates:metadata:v1:real@${version}`, {
+      version,
+      license: version === "1.0.0" ? "MIT" : "ISC",
+      yanked: false,
+    });
+  const files = new Map([
+    ["/a/Cargo.lock", lockText([["real", "1.0.0"]])],
+    ["/b/Cargo.lock", lockText([["real", "1.1.0"]])],
+    ["/b/Cargo.toml", '[workspace]\n[workspace.dependencies]\nalias={package="real",version="1"}'],
+  ]);
+  t.mock.method(stub.workspace.fs, "readFile", async (uri) => {
+    if (!files.has(uri.path)) throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+    return Buffer.from(files.get(uri.path));
+  });
+  t.mock.method(global, "fetch", () => {
+    throw new Error("unexpected network");
+  });
+  const provider = new CratesLicenseProvider(cache);
+  const a = fakeDocument('[dependencies]\nalias={package="real",version="1"}', "/a/Cargo.toml");
+  const b = fakeDocument(
+    '[package]\nworkspace="../b"\n[dependencies]\nalias.workspace=true',
+    "/else/Cargo.toml"
+  );
+  const results = await Promise.all(
+    [a, b].map((d) => provider.resolve(provider.parse(d)[0], d, noCancel))
+  );
+  assert.deepEqual(
+    results.map((r) => [r.version, r.license]),
+    [
+      ["1.0.0", "MIT"],
+      ["1.1.0", "ISC"],
+    ]
+  );
+  assert.notEqual(provider.cacheKey(provider.parse(a)[0]), provider.cacheKey(provider.parse(b)[0]));
+});
+
+test("Cargo resolution integrates with Annotator Refresh and independent manifests", async (t) => {
+  t.mock.method(stub.workspace.fs, "readFile", async () => {
+    throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+  });
+  t.mock.method(stub.workspace, "getConfiguration", () => ({
+    get: (key, fallback) => (key === "crates.useRegistry" ? false : fallback),
+  }));
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  cache.set("crates:versions:v1:real", [{ version: "1.0.0", license: "MIT", yanked: false }]);
+  const provider = new CratesLicenseProvider(cache);
+  const editor = fakeEditor(
+    fakeDocument('[dependencies]\na={package="real",version="1"}', "/project/Cargo.toml")
+  );
+  setVisibleEditors([editor]);
+  const annotator = new Annotator([provider]);
+  t.after(() => {
+    annotator.dispose();
+    setVisibleEditors([]);
+  });
+  annotator.refreshAll();
+  await new Promise((r) => setTimeout(r, 350));
+  assert.ok(editor.lastDecorations.some((d) => d.renderOptions.after.contentText.includes("MIT")));
+  cache.clear();
+  annotator.invalidate();
+  annotator.refreshAll();
+  await new Promise((r) => setTimeout(r, 350));
+  assert.equal(editor.lastDecorations.length, 0);
+});
 
 test("Cargo TOML forms preserve aliases, sections and declaration start lines", () => {
   const text = `[dependencies]

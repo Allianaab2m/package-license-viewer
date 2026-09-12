@@ -22,6 +22,32 @@ The npm provider ([`src/providers/npm/`](src/providers/npm/)) resolves in three 
 
 ## Adding another ecosystem
 
+Cargo's implementation lives in [`src/providers/crates/`](src/providers/crates/).
+`parse.ts` uses the position-aware MIT-licensed `toml-eslint-parser` 0.10.0
+(CommonJS, Node >=16 supported); keep the extension's minimum VS Code version
+when changing this dependency. TOML 1.0 declarations use their first line, or
+the dependency table header, as the annotation position. Invalid TOML yields
+no entries. Cargo requirements are interpreted independently of npm ranges;
+the saved Rust `semver::VersionReq` oracle and generated Cargo.lock fixture are
+described in [`cargo-provenance.md`](test/fixtures/lockfiles/cargo-provenance.md).
+
+`workspace.ts` and `lockfile.ts` only locate declarations and uniquely matching
+public versions. `client.ts` shares a send-start limiter (one request per second)
+across clients and uses `fetchJson` for HTTP. Its `/versions` request deliberately
+omits `per_page`: the [API implementation](https://github.com/rust-lang/crates.io/blob/main/src/controllers/krate/versions.rs)
+returns all versions in this mode. A response advertising another page is rejected
+instead of being treated as complete. The version records carry `license`, so
+candidate selection needs no request for each individual version. Exact locked
+versions use the per-version endpoint, including yanked versions. Transient
+failures are never written to `LicenseCache`; HTTP 429 delays subsequent sends
+for at least one minute without automatic retries.
+
+Keep manifest resolution keys separate from public version metadata keys. The
+former include the URI, alias, section, source, requirement and workspace context;
+the latter share exact public metadata across documents. `invalidate()` clears
+auxiliary reads and cancels pending Cargo requests. No Cargo command, archive
+reader, source cache, filesystem watcher or dependency graph belongs here.
+
 Implement `LicenseProvider` and register it — no other file needs to change.
 
 ```ts
