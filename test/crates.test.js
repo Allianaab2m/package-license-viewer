@@ -736,3 +736,46 @@ test("Refresh during Cargo HTTP retries after the invalidated request settles", 
   assert.equal(aborts, 1);
   assert.ok(editor.lastDecorations.some((d) => d.renderOptions.after.contentText.includes("MIT")));
 });
+
+test("root replace Package IDs exclude only the referenced crates.io name", async (t) => {
+  t.mock.method(stub.workspace.fs, "readFile", async () => {
+    throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+  });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const calls = [];
+  t.mock.method(CratesClient.prototype, "metadata", async (name) => {
+    calls.push(name);
+    return { kind: "found", metadata: { version: "1.0.0", license: "MIT", yanked: false } };
+  });
+  const http = t.mock.method(global, "fetch", async () => {
+    throw new Error("unexpected HTTP");
+  });
+  for (const [id, excluded] of [
+    ["real:1.0.0", true],
+    ["real@1.0.0", true],
+    ["https://github.com/rust-lang/crates.io-index#real@1.0.0", true],
+    ["registry+https://github.com/rust-lang/crates.io-index#real@1.0.0", true],
+    ["registry+https://github.com/rust-lang/crates.io-index#real:1.0.0", true],
+    ["git+https://github.com/rust-lang/crates.io-index#real@1.0.0", false],
+    ["registry+https://private.example/index#real@1.0.0", false],
+    ["git+https://example.com/real#real@1.0.0", false],
+    ["other@1.0.0", false],
+  ]) {
+    calls.length = 0;
+    const document = fakeDocument(
+      `[workspace]\n[dependencies]\nalias={package="real",version="1"}\nunrelated="1"\n[replace]\n"${id}"={path="../private"}`,
+      "/replace/Cargo.toml"
+    );
+    const provider = new CratesLicenseProvider(cache);
+    const [entry, unrelated] = provider.parse(document);
+    assert.equal(
+      (await provider.resolve(entry, document, noCancel)).source,
+      excluded ? "skipped" : "registry",
+      id
+    );
+    assert.deepEqual(calls, excluded ? [] : ["real"], id);
+    assert.equal((await provider.resolve(unrelated, document, noCancel)).source, "registry");
+  }
+  assert.equal(http.mock.callCount(), 0);
+});

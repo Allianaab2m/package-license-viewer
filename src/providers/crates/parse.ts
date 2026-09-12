@@ -1,5 +1,6 @@
 import { getStaticTOMLValue, parseTOML, type AST } from "toml-eslint-parser";
 import type { DependencyEntry } from "../types";
+import { matchesRequirement, parseRequirement } from "./spec";
 
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -66,6 +67,21 @@ function sectionLength(path: readonly (string | number)[]): number {
   return 0;
 }
 
+/** Recognize crates.io replace IDs without interpreting other sources as public crates. */
+function replacedCrate(id: string): string | undefined {
+  let packageId = id;
+  if (id.includes("://")) {
+    const source =
+      /^(?:registry\+)?https:\/\/github\.com\/rust-lang\/crates\.io-index\/?#(.+)$/.exec(id);
+    if (!source) return undefined;
+    packageId = source[1];
+  }
+  const match = /^([A-Za-z0-9][A-Za-z0-9_-]*)[@:](.+)$/.exec(packageId);
+  // Cargo requires a full version in replace keys, unlike general package ID specs.
+  if (!match || !matchesRequirement(parseRequirement(`=${match[2]}`), match[2])) return undefined;
+  return match[1];
+}
+
 /** Whole-document parsing is intentional: malformed TOML never produces partial annotations. */
 export function parseManifest(text: string, manifestUri: string): CargoManifest | undefined {
   try {
@@ -89,7 +105,10 @@ export function parseManifest(text: string, manifestUri: string): CargoManifest 
       }
     }
     if (record(data.replace)) {
-      for (const name of Object.keys(data.replace)) overrides.push(name.split(":")[0]);
+      for (const id of Object.keys(data.replace)) {
+        const name = replacedCrate(id);
+        if (name) overrides.push(name);
+      }
     }
     const context = JSON.stringify([workspace, pkg.workspace, overrides.sort(), data.workspace]);
     const entries = new Map<string, CargoEntry>();
