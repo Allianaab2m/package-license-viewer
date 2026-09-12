@@ -14,10 +14,16 @@ export interface CrateVersion {
 export type MetadataResult =
   { kind: "found"; metadata: CrateVersion } | { kind: "unknown"; reason: string };
 
+/** crates.io treats "-" and "_" as the same crate identity, so compare names that way too. */
+function normalizeCrateName(name: string): string {
+  return name.replace(/_/g, "-");
+}
+
 function decodeVersion(value: unknown, name: string): CrateVersion {
   if (
     !record(value) ||
-    value.crate !== name ||
+    typeof value.crate !== "string" ||
+    normalizeCrateName(value.crate) !== normalizeCrateName(name) ||
     typeof value.num !== "string" ||
     !validVersion(value.num) ||
     typeof value.yanked !== "boolean" ||
@@ -182,7 +188,21 @@ export class CratesClient {
             (record(json.meta) && json.meta.next_page != null)
           )
             throw new Error("incomplete crates.io version list");
-          versions = json.versions.map((v) => decodeVersion(v, name));
+          // A single malformed record (unexpected crates.io response shape, name-mismatch, ...)
+          // should not throw away every other version this crate actually has.
+          const decoded = json.versions.flatMap((v) => {
+            try {
+              return [decodeVersion(v, name)];
+            } catch {
+              return [];
+            }
+          });
+          // ...but if nothing decoded at all from a non-empty response, that's a sign the
+          // response itself is wrong (e.g. an unexpected shape), not that the crate has zero
+          // versions — don't cache that as a confirmed-empty result, retry next time instead.
+          if (decoded.length === 0 && json.versions.length > 0)
+            throw new Error("no version record could be decoded");
+          versions = decoded;
           fetched = true;
           checkCancelled(token);
           if (epoch === this.epoch) this.cache.set(listKey, versions);

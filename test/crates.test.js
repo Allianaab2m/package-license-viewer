@@ -249,6 +249,63 @@ test("Cargo client validates complete lists, caches exact metadata and handles f
   for (let i = 1; i < starts.length; i++) assert.ok(starts[i][0] - starts[i - 1][0] >= 1000);
 });
 
+test("Cargo client treats - and _ as the same crate name, and skips a lone bad record without discarding the rest", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() + 100_000 });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const client = new CratesClient(cache);
+  t.mock.method(stub.workspace, "getConfiguration", () => ({
+    get: (_key, fallback) => fallback,
+  }));
+  let response;
+  t.mock.method(global, "fetch", async () => ({
+    ok: true,
+    status: 200,
+    json: async () => response,
+  }));
+  // CratesRateLimiter is a module-level singleton shared by every test in this file, so its
+  // `nextStart` may already be far ahead of this test's own mocked clock (e.g. left there by
+  // the 429 case in the test above). Tick in a loop instead of a single fixed amount, so this
+  // test doesn't depend on exactly how much delay earlier tests happened to leave behind.
+  async function run(promise) {
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+    for (let i = 0; i < 20; i++) {
+      t.mock.timers.tick(60_000);
+      for (let j = 0; j < 40; j++) await Promise.resolve();
+    }
+    return promise;
+  }
+
+  // crates.io reports the canonical "foo-bar" spelling even when Cargo.toml wrote "foo_bar".
+  response = { versions: [{ ...apiVersion("1.0.0"), crate: "foo-bar" }] };
+  const req = parseRequirement("1");
+  const underscored = await run(client.metadata("foo_bar", req, undefined, noCancel));
+  assert.equal(underscored.kind, "found");
+  assert.equal(underscored.metadata.version, "1.0.0");
+
+  // One malformed record among otherwise-good ones shouldn't take the whole list down with it.
+  response = {
+    versions: [apiVersion("1.0.0", { crate: "not-real" }), apiVersion("1.5.0")],
+  };
+  const partial = await run(client.metadata("real", req, undefined, noCancel));
+  assert.equal(partial.kind, "found");
+  assert.equal(partial.metadata.version, "1.5.0");
+
+  // If every record fails to decode, that's treated as a failed fetch (and not cached), not a
+  // confirmed-empty version list.
+  cache.clear();
+  response = { versions: [apiVersion("1.0.0", { crate: "not-real" })] };
+  const allBad = await run(client.metadata("real", req, undefined, noCancel));
+  assert.equal(allBad.kind, "unknown");
+  response = { versions: [apiVersion("1.0.0")] };
+  const retried = await run(client.metadata("real", req, undefined, noCancel));
+  assert.equal(
+    retried.kind,
+    "found",
+    "a later call should retry rather than reuse a bad cache entry"
+  );
+});
+
 test("Cargo rate limiter spaces actual starts, skips queued cancellation and checks disabled settings", async (t) => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1000 });
   const limiter = new CratesRateLimiter();
