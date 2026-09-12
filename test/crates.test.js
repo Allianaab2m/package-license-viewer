@@ -594,3 +594,45 @@ test("Cargo requirement semantics differ from npm and match Rust VersionReq", ()
   assert.equal(compareVersions("1.0.0-alpha.9", "1.0.0-alpha.10"), -1);
   assert.equal(compareVersions("1.0.0+a", "1.0.0+b"), 0);
 });
+
+test("an active Cargo update retries a cancelled shared lookup without a third event", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() + 1_000_000_000 });
+  t.mock.method(stub.workspace.fs, "readFile", async () => {
+    throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+  });
+  let starts = 0,
+    aborts = 0;
+  t.mock.method(global, "fetch", async (_url, options) => {
+    starts++;
+    if (starts === 1)
+      return new Promise((_resolve, reject) =>
+        options.signal.addEventListener("abort", () => {
+          aborts++;
+          reject(options.signal.reason);
+        })
+      );
+    return { ok: true, json: async () => ({ versions: [apiVersion("1.0.0")] }) };
+  });
+  const cache = makeCache();
+  const provider = new CratesLicenseProvider(cache);
+  const document = fakeDocument('[dependencies]\nreal="1"', "/reupdate/Cargo.toml");
+  const editor = fakeEditor(document);
+  setVisibleEditors([editor]);
+  const annotator = new Annotator([provider]);
+  t.after(() => {
+    annotator.dispose();
+    cache.dispose();
+    setVisibleEditors([]);
+  });
+  const first = annotator.update(document);
+  await settle();
+  assert.equal(starts, 1);
+  const second = annotator.update(document);
+  await settle();
+  t.mock.timers.tick(1000);
+  await settle();
+  await Promise.all([first, second]);
+  assert.equal(aborts, 1);
+  assert.equal(starts, 2);
+  assert.ok(editor.lastDecorations.some((d) => d.renderOptions.after.contentText.includes("MIT")));
+});

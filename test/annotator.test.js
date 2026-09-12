@@ -194,3 +194,37 @@ test("a provider that throws does not stop the other dependencies", async () => 
   );
   annotator.dispose();
 });
+
+test("shared lookups retry only cancelled failures for live waiters", async () => {
+  const { stub } = require("./vscode-stub");
+  for (const [source, cancelOwner, cancelWaiter, expected] of [
+    ["unknown", true, false, 2],
+    ["unknown", false, false, 1],
+    ["unknown", true, true, 1],
+    ["registry", true, false, 1],
+  ]) {
+    const provider = new SlowProvider(0);
+    const { annotator, document } = setup(provider);
+    const owner = new stub.CancellationTokenSource();
+    const waiter = new stub.CancellationTokenSource();
+    let finish;
+    provider.resolve = async () => {
+      provider.resolveCalls++;
+      if (provider.resolveCalls === 1)
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      return { source: "registry", license: "MIT" };
+    };
+    const entry = provider.parse(document)[0];
+    const first = annotator.resolveEntry(provider, entry, document, owner.token);
+    const second = annotator.resolveEntry(provider, entry, document, waiter.token);
+    const third = annotator.resolveEntry(provider, entry, document, waiter.token);
+    if (cancelOwner) owner.cancel();
+    if (cancelWaiter) waiter.cancel();
+    finish({ source, license: source === "registry" ? "MIT" : undefined });
+    await Promise.all([first, second, third]);
+    assert.equal(provider.resolveCalls, expected, `${source}/${cancelOwner}/${cancelWaiter}`);
+    annotator.dispose();
+  }
+});

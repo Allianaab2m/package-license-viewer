@@ -40,7 +40,10 @@ interface StoredResult {
 export class Annotator implements vscode.Disposable {
   private decorationTypes: AnnotationDecorationTypes;
   private readonly results = new Map<string, StoredResult>();
-  private readonly inflight = new Map<string, Promise<LicenseInfo>>();
+  private readonly inflight = new Map<
+    string,
+    { promise: Promise<LicenseInfo>; token: vscode.CancellationToken }
+  >();
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
   private readonly cancellations = new Map<string, vscode.CancellationTokenSource>();
   private readonly disposables: vscode.Disposable[] = [];
@@ -196,7 +199,17 @@ export class Annotator implements vscode.Disposable {
     const key = this.keyOf(provider, entry);
     const existing = this.inflight.get(key);
     if (existing) {
-      return existing;
+      const info = await existing.promise;
+      // A live update must take over failed work owned by a cancelled update.
+      // Successful answers and ordinary failures remain shared, without retries.
+      if (
+        info.source === "unknown" &&
+        existing.token.isCancellationRequested &&
+        !token.isCancellationRequested
+      ) {
+        return this.resolveEntry(provider, entry, document, token);
+      }
+      return info;
     }
 
     const promise = provider
@@ -217,7 +230,7 @@ export class Annotator implements vscode.Disposable {
         this.inflight.delete(key);
       });
 
-    this.inflight.set(key, promise);
+    this.inflight.set(key, { promise, token });
     return promise;
   }
 
