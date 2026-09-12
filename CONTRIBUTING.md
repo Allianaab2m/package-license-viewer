@@ -61,6 +61,7 @@ npm run watch      # esbuild in watch mode
 
 ```sh
 npm run format:check     # prettier --check .
+npm run lint             # eslint .
 npm run check-types      # tsc --noEmit
 npm test                 # unit tests, against real lockfile fixtures
 npm run test:integration # runs the extension inside a real VS Code
@@ -71,7 +72,7 @@ The lockfiles in [`test/fixtures/lockfiles/`](test/fixtures/lockfiles/) were pro
 
 `npm test` also loads the bundled `dist/extension.js`, because bundling can break the extension on its own: a dependency whose entry point defers its `require()` calls to runtime resolves fine under `tsc` and then fails inside the extension host.
 
-Run `npm run format` before committing; CI enforces `format:check`.
+Run `npm run format` before committing; CI enforces `format:check` and `lint`.
 
 ## Releasing
 
