@@ -4,6 +4,7 @@ import { LicenseCache } from "../../cache";
 import { buildHover } from "../../format";
 import { createProviders, findProvider } from "../../providers";
 import { CratesLicenseProvider } from "../../providers/crates";
+import { workspaceManifestUri } from "../../providers/crates/workspace";
 
 const noCancel: vscode.CancellationToken = {
   isCancellationRequested: false,
@@ -17,6 +18,30 @@ function uri(...parts: string[]): vscode.Uri {
 }
 
 suite("Cargo-only workspace", () => {
+  test("workspace paths preserve real URI scheme and authority across path forms", () => {
+    for (const [base, reference, expected] of [
+      ["/app", "/ws", "/ws/Cargo.toml"],
+      ["/app", "../ws", "/ws/Cargo.toml"],
+      ["/C:/app", "D:\\ws", "/D:/ws/Cargo.toml"],
+      ["/C:/app", "D:/ws", "/D:/ws/Cargo.toml"],
+      ["/C:/app/member", "..\\ws", "/C:/app/ws/Cargo.toml"],
+      ["/C:/app", "\\ws", "/C:/ws/Cargo.toml"],
+      ["/app", "literal\\name", "/app/literal\\name/Cargo.toml"],
+    ]) {
+      const directory = vscode.Uri.from({
+        scheme: "vscode-remote",
+        authority: "ssh-remote+host",
+        path: base,
+      });
+      const result = workspaceManifestUri(directory, reference);
+      assert.equal(result?.path, expected);
+      assert.equal(result?.scheme, directory.scheme);
+      assert.equal(result?.authority, directory.authority);
+    }
+    const local = vscode.Uri.file("C:\\app");
+    if (process.platform === "win32")
+      assert.equal(workspaceManifestUri(local, "D:\\ws")?.fsPath, "d:\\ws\\Cargo.toml");
+  });
   test("activates automatically before any document or command is opened", async () => {
     assert.equal(vscode.window.visibleTextEditors.length, 0);
     const extension = vscode.extensions.getExtension("otoneko1102.package-license-viewer");

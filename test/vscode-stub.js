@@ -42,15 +42,26 @@ class CancellationTokenSource {
   }
 }
 
+function fakeUri(uriPath, scheme = "", authority = "") {
+  return {
+    path: uriPath,
+    scheme,
+    authority,
+    toString: () => (scheme ? `${scheme}://${authority}${uriPath}` : uriPath),
+    with: (changes) =>
+      fakeUri(changes.path ?? uriPath, changes.scheme ?? scheme, changes.authority ?? authority),
+  };
+}
+
 const stub = {
   Uri: {
     joinPath(base, ...parts) {
       const joined = path.posix.normalize([base.path, ...parts].join("/"));
-      return { path: joined, toString: () => joined };
+      return fakeUri(joined, base.scheme, base.authority);
     },
     file(fsPath) {
       const normalized = "/" + fsPath.replace(/\\/g, "/").replace(/^\//, "");
-      return { path: normalized, toString: () => normalized };
+      return fakeUri(normalized);
     },
   },
   Position: class {

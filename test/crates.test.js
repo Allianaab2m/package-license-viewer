@@ -636,3 +636,21 @@ test("an active Cargo update retries a cancelled shared lookup without a third e
   assert.equal(starts, 2);
   assert.ok(editor.lastDecorations.some((d) => d.renderOptions.after.contentText.includes("MIT")));
 });
+
+test("explicit absolute Cargo workspace roots are not appended to the member directory", async (t) => {
+  const requested = [];
+  t.mock.method(stub.workspace.fs, "readFile", async (uri) => {
+    requested.push(uri.path);
+    if (uri.path === "/ws/Cargo.toml")
+      return Buffer.from('[workspace]\n[workspace.dependencies]\nreal="1"');
+    throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+  });
+  const { CargoWorkspace } = require("../out/providers/crates/workspace");
+  const document = fakeDocument('[package]\nworkspace="/ws"', "/app/Cargo.toml");
+  const result = await new CargoWorkspace().root(
+    document.uri,
+    parseManifest(document.getText(), document.uri.toString())
+  );
+  assert.equal(result.kind, "found");
+  assert.deepEqual(requested, ["/ws/Cargo.toml"]);
+});
