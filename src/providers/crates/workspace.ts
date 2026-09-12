@@ -16,6 +16,7 @@ export function workspaceManifestUri(
   if ((/^[A-Za-z]:/.test(reference) && !absoluteDrive) || reference.startsWith("\\\\"))
     return undefined;
   const path = drive || absoluteDrive ? reference.replace(/\\/g, "/") : reference;
+  if ((drive || absoluteDrive) && path.startsWith("//")) return undefined;
   const root = absoluteDrive
     ? directory.with({ path: `/${path}` })
     : path.startsWith("/")

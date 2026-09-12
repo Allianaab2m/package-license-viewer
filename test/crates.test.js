@@ -779,3 +779,33 @@ test("root replace Package IDs exclude only the referenced crates.io name", asyn
   }
   assert.equal(http.mock.callCount(), 0);
 });
+
+test("Windows UNC variants stop before any workspace file read", async (t) => {
+  const { CargoWorkspace, workspaceManifestUri } = require("../out/providers/crates/workspace");
+  const reads = t.mock.method(stub.workspace.fs, "readFile", async () =>
+    Buffer.from("[workspace]")
+  );
+  for (const reference of [
+    "//server/share/ws",
+    "/\\server/share/ws",
+    "\\/server/share/ws",
+    "\\\\server\\share\\ws",
+    "//?/C:/ws",
+    "//./C:/ws",
+  ]) {
+    const directory = stub.Uri.file("/C:/app");
+    assert.equal(workspaceManifestUri(directory, reference), undefined, reference);
+    const document = fakeDocument(`[package]\nworkspace='${reference}'`, "/C:/app/Cargo.toml");
+    const root = await new CargoWorkspace().root(
+      document.uri,
+      parseManifest(document.getText(), document.uri.toString())
+    );
+    assert.equal(root.kind, "unknown", reference);
+  }
+  assert.equal(reads.mock.callCount(), 0);
+  assert.equal(
+    workspaceManifestUri(stub.Uri.file("/app"), "name\\part")?.path,
+    "/app/name\\part/Cargo.toml"
+  );
+  assert.equal(workspaceManifestUri(stub.Uri.file("/app"), "/\\name")?.path, "/\\name/Cargo.toml");
+});

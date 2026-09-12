@@ -125,11 +125,13 @@ table header. Invalid TOML produces no annotations until it is corrected.
 `package` aliases are followed to the real crate name. `[workspace.dependencies]`
 is annotated directly; `workspace = true` inherits the corresponding alias from
 an explicit `package.workspace` root or the nearest ancestor `[workspace]`.
-Virtual and nested roots are supported. This is a limited declaration lookup:
+Virtual and nested roots are supported.
 Relative and absolute workspace paths preserve the document's URI scheme and
 authority. Windows drive paths and backslash separators are supported; drive-relative
-and UNC/device references are reported as unknown rather than guessed.
-members are not enumerated and workspace membership is not fully validated.
+and UNC/device references (including forward-slash or mixed UNC separators on Windows)
+are reported as unknown rather than guessed.
+This is a limited declaration lookup: members are not enumerated and workspace
+membership is not fully validated.
 An unreadable or conflicting reference is unknown, not guessed.
 
 The lookup path is:

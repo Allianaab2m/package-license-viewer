@@ -39,6 +39,21 @@ suite("Cargo-only workspace", () => {
       assert.equal(result?.authority, directory.authority);
     }
     const local = vscode.Uri.file("C:\\app");
+    for (const reference of [
+      "//server/share/ws",
+      "/\\server/share/ws",
+      "\\/server/share/ws",
+      "//?/C:/ws",
+    ]) {
+      const remote = vscode.Uri.from({
+        scheme: "vscode-remote",
+        authority: "ssh-remote+host",
+        path: "/C:/app",
+      });
+      assert.equal(workspaceManifestUri(remote, reference), undefined, reference);
+      if (process.platform === "win32")
+        assert.equal(workspaceManifestUri(local, reference), undefined, reference);
+    }
     if (process.platform === "win32")
       assert.equal(workspaceManifestUri(local, "D:\\ws")?.fsPath, "d:\\ws\\Cargo.toml");
   });
