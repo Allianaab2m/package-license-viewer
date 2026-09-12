@@ -228,3 +228,27 @@ test("shared lookups retry only cancelled failures for live waiters", async () =
     annotator.dispose();
   }
 });
+
+test("invalidated lookups cannot store stale successes or remove their replacements", async () => {
+  const { stub } = require("./vscode-stub");
+  const provider = new SlowProvider(0);
+  const { annotator, document } = setup(provider);
+  const finishes = [];
+  provider.resolve = () => new Promise((resolve) => finishes.push(resolve));
+  const entry = provider.parse(document)[0];
+  const token = new stub.CancellationTokenSource().token;
+  const old = annotator.resolveEntry(provider, entry, document, token);
+  annotator.invalidate();
+  const current = annotator.resolveEntry(provider, entry, document, token);
+  finishes[0]({ source: "registry", license: "stale" });
+  await old;
+  assert.equal(annotator.results.size, 0);
+  assert.equal(annotator.inflight.size, 1);
+  const shared = annotator.resolveEntry(provider, entry, document, token);
+  assert.equal(finishes.length, 2);
+  finishes[1]({ source: "registry", license: "MIT" });
+  await Promise.all([current, shared]);
+  assert.equal(annotator.inflight.size, 0);
+  assert.equal([...annotator.results.values()][0].info.license, "MIT");
+  annotator.dispose();
+});

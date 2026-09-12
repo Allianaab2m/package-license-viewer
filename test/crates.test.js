@@ -690,3 +690,49 @@ test("offline locked metadata reuses exact records from a fresh version list", a
   );
   assert.equal(http.mock.callCount(), 0);
 });
+
+test("Refresh during Cargo HTTP retries after the invalidated request settles", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() + 2_000_000_000 });
+  t.mock.method(stub.workspace.fs, "readFile", async () => {
+    throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+  });
+  let starts = 0,
+    aborts = 0;
+  t.mock.method(global, "fetch", async (_url, options) => {
+    starts++;
+    if (starts === 1)
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => {
+          aborts++;
+          reject(options.signal.reason);
+        });
+      });
+    return { ok: true, json: async () => ({ versions: [apiVersion("1.0.0")] }) };
+  });
+  const cache = makeCache();
+  const provider = new CratesLicenseProvider(cache);
+  const document = fakeDocument('[dependencies]\nreal="1"', "/refresh/Cargo.toml");
+  const editor = fakeEditor(document);
+  setVisibleEditors([editor]);
+  const annotator = new Annotator([provider]);
+  t.after(() => {
+    annotator.dispose();
+    cache.dispose();
+    setVisibleEditors([]);
+  });
+  const first = annotator.update(document);
+  await settle();
+  assert.equal(starts, 1);
+  annotator.invalidate();
+  annotator.refreshAll();
+  await settle();
+  await first;
+  assert.equal(annotator.results.size, 0, "invalidated failure must not repopulate results");
+  t.mock.timers.tick(25);
+  await settle();
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(starts, 2);
+  assert.equal(aborts, 1);
+  assert.ok(editor.lastDecorations.some((d) => d.renderOptions.after.contentText.includes("MIT")));
+});
