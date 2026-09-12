@@ -181,6 +181,7 @@
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "check-types": "tsc --noEmit",
+    "lint": "eslint .",
     "build-tests": "tsc",
     "test": "npm run build-tests && node --test test/index.test.js test/annotator.test.js",
     "test:integration": "npm run compile && npm run build-tests && vscode-test",
@@ -194,6 +195,7 @@
     "semver": "^7.6.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.10.0",
     "@types/semver": "^7.5.8",
@@ -202,8 +204,11 @@
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.28.2",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
     "mocha": "^12.0.1",
     "prettier": "^3.9.6",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0"
   }
 }

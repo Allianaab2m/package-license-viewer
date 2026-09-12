@@ -16,6 +16,7 @@ class CancellationTokenSource {
   constructor() {
     this._cancelled = false;
     this._listeners = [];
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- captured for the getters/methods below
     const self = this;
     this.token = {
       get isCancellationRequested() {

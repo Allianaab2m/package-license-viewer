@@ -130,11 +130,11 @@ test("annotations land on the line of their dependency", async () => {
 // The license is drawn in its own colour via a decoration split into spacer/before/license/after pieces that all share the same range (see annotator.ts). Attaching the same hoverMessage to more than one of them made the hover popup show the same content once per piece — reported as the popup looking "tripled".
 test("hovering an annotation shows the tooltip only once, even with several visible pieces", async () => {
   const provider = new SlowProvider(0);
-  provider.resolve = async (entry) => {
+  provider.resolve = async (_entry) => {
     provider.resolveCalls++;
     return { license: "MIT", version: "1.0.0", source: "local", nodeEngine: ">=18" };
   };
-  const { document, editor, annotator } = setup(provider);
+  const { editor, annotator } = setup(provider);
 
   annotator.refreshAll();
   await sleep(300);
