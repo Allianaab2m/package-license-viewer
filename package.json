@@ -2,7 +2,7 @@
   "name": "package-license-viewer",
   "displayName": "Package License Viewer",
   "description": "Shows dependency license metadata inline in package.json, deno.json and Cargo.toml.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "otoneko1102",
   "license": "MIT",
   "engines": {

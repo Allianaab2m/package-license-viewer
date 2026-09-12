@@ -1,5 +1,31 @@
 # Change Log
 
+## [0.4.0]
+
+### Added
+
+- Add .private to .gitignore
+- Add eslint
+- Add issue templates for bug reports and feature requests
+- Parse Cargo dependency declarations and version requirements
+- Resolve Cargo license metadata from workspace and lockfile hints
+- Add Cargo license annotations
+
+
+### Fixed
+
+- Retry cancelled shared lookups for active annotation updates
+- Resolve absolute Cargo workspace paths without changing URI identity
+- Reuse cached version lists for locked Cargo metadata
+- Prevent invalidated annotation lookups from restoring stale results
+- Recognize crates.io package IDs in root replacements
+- Reject mixed-separator Windows UNC workspace references
+- Recognize trailing slashes in crates.io patch URLs
+- Preserve metadata expiry when reusing cached crate versions
+- Cancel pending annotation updates when display is disabled
+- Crates.ioのクレート名表記ゆれと不正なバージョンレコードへの対応
+- Unknown解決結果でもResolved fromに取得経路(via)を表示する
+
 ## [0.3.1]
 
 ### Fixed
