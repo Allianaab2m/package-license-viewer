@@ -252,3 +252,34 @@ test("invalidated lookups cannot store stale successes or remove their replaceme
   assert.equal([...annotator.results.values()][0].info.license, "MIT");
   annotator.dispose();
 });
+
+test("disabled annotations stay hidden when an earlier lookup completes", async (t) => {
+  const { stub } = require("./vscode-stub");
+  for (const disableProvider of [false, true]) {
+    let enabled = true,
+      finish;
+    t.mock.method(stub.workspace, "getConfiguration", () => ({
+      get: (key, fallback) => (key === "enabled" ? disableProvider || enabled : fallback),
+    }));
+    const provider = new SlowProvider(0);
+    provider.isEnabled = () => !disableProvider || enabled;
+    const pending = new Promise((resolve) => {
+      finish = resolve;
+    });
+    provider.resolve = () => pending;
+    const { annotator, document, editor } = setup(provider);
+    const first = annotator.update(document);
+    assert.ok(finish);
+    enabled = false;
+    await annotator.update(document);
+    assert.equal(editor.lastDecorations.length, 0);
+    // Providers may still finish successfully after cancellation.
+    finish({ source: "registry", license: "MIT" });
+    await first;
+    assert.equal(editor.lastDecorations.length, 0);
+    enabled = true;
+    await annotator.update(document);
+    assert.equal(editor.lastDecorations.length, DEPENDENCY_COUNT);
+    annotator.dispose();
+  }
+});

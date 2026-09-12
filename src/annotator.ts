@@ -126,6 +126,7 @@ export class Annotator implements vscode.Disposable {
     const config = getConfig(document);
     const provider = config.enabled ? findProvider(this.providers, document) : undefined;
     if (!provider) {
+      this.cancel(key);
       this.setDecorations(editors, emptyAnnotationOptions());
       return;
     }
