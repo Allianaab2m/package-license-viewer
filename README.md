@@ -151,6 +151,9 @@ Requests follow the [crates.io Data Access Policy](https://crates.io/data-access
 at most one request per second per extension host, with an identifying User-Agent.
 An HTTP 429 delays subsequent requests for at least one minute without an automatic
 retry loop. Offline mode permits cached metadata; Clear License Cache removes it.
+For a locked version, a matching record in a fresh cached version list is also
+usable, including yanked versions and records without a license string. No other
+version is substituted, and reuse does not extend the original cache lifetime.
 
 Path, git and explicitly named registry dependencies are skipped, even if they
 also specify a version. Their names are not sent to crates.io. Recognized root

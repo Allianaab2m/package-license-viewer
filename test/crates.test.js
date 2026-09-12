@@ -654,3 +654,39 @@ test("explicit absolute Cargo workspace roots are not appended to the member dir
   assert.equal(result.kind, "found");
   assert.deepEqual(requested, ["/ws/Cargo.toml"]);
 });
+
+test("offline locked metadata reuses exact records from a fresh version list", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() });
+  t.mock.method(stub.workspace, "getConfiguration", () => ({
+    get: (key, fallback) => (key === "crates.useRegistry" ? false : fallback),
+  }));
+  const http = t.mock.method(global, "fetch", async () => {
+    throw new Error("unexpected HTTP");
+  });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const client = new CratesClient(cache);
+  for (const metadata of [
+    { version: "1.0.0", license: "MIT", yanked: false },
+    { version: "1.0.0", license: "MIT", yanked: true },
+    { version: "1.0.0", yanked: true },
+  ]) {
+    cache.clear();
+    cache.set("crates:versions:v1:real", [
+      metadata,
+      { version: "1.2.0", license: "ISC", yanked: false },
+    ]);
+    const result = await client.metadata("real", parseRequirement("1"), "1.0.0", noCancel);
+    assert.deepEqual(result, { kind: "found", metadata });
+    assert.equal(
+      (await client.metadata("real", parseRequirement("1"), "1.0.1", noCancel)).kind,
+      "unknown"
+    );
+  }
+  t.mock.timers.tick(168 * 60 * 60 * 1000 + 1);
+  assert.equal(
+    (await client.metadata("real", parseRequirement("1"), "1.0.0", noCancel)).kind,
+    "unknown"
+  );
+  assert.equal(http.mock.callCount(), 0);
+});

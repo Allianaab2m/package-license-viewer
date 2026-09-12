@@ -149,7 +149,10 @@ export class CratesClient {
     const listKey = `crates:versions:v1:${name}`;
     try {
       checkCancelled(token);
-      const cached = locked ? this.cache.get<CrateVersion>(key(locked)) : undefined;
+      const cached = locked
+        ? (this.cache.get<CrateVersion>(key(locked)) ??
+          this.cache.get<CrateVersion[]>(listKey)?.find((metadata) => metadata.version === locked))
+        : undefined;
       if (cached) return { kind: "found", metadata: cached };
       let selected: CrateVersion | undefined;
       if (locked) {
