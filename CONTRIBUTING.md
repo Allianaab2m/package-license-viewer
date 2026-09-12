@@ -85,11 +85,22 @@ Run `npm run format` before committing; CI enforces `format:check` and `lint`.
 [`.github/workflows/release.yml`](.github/workflows/release.yml) is run by hand from the Actions tab. Give it a version — a bump keyword (`patch`, `minor`, `major`, `prerelease`) or an explicit version like `0.2.0` — and it does the rest:
 
 1. type-check, unit tests, and the integration suite in a real VS Code
-2. bump `package.json` and build the `.vsix`
-3. publish to the VS Code Marketplace
-4. commit, tag and push, then create the GitHub Release with the `.vsix` attached
+2. bump `package.json`, and update `CHANGELOG.md` from Conventional Commits since the last tag
+3. build the `.vsix`
+4. publish to the VS Code Marketplace
+5. commit, tag and push, then create the GitHub Release with the `.vsix` attached
 
 Publishing is skipped automatically when `VSCE_PAT` is absent, so the workflow is usable before you have a token. Get one from <https://marketplace.visualstudio.com/manage> — an Azure DevOps PAT with the Marketplace → Manage scope — and add it as a repository secret.
+
+### Changelog
+
+`CHANGELOG.md` is generated with [git-cliff](https://git-cliff.org) (config in [`cliff.toml`](cliff.toml)) from commit messages since the last tag, grouped by [Conventional Commits](https://www.conventionalcommits.org/) type — `feat` → Added, `fix` → Fixed, `perf` → Performance, `refactor`/`revert` → Changed. Everything else (`chore`, `docs`, `test`, `style`, `ci`, `build`, `release`, merge commits) is left out, the same way it always was when this was written by hand. Write commit subjects with that in mind — they end up as changelog lines close to verbatim.
+
+To preview what the next release's entry would look like without touching anything:
+
+```sh
+npx git-cliff --unreleased --tag vX.Y.Z
+```
 
 Tagging happens only after publishing succeeded, so a failed release leaves no dangling tag. Tick `dry_run` to rehearse the whole pipeline without publishing, committing or tagging.
 
