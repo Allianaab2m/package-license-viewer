@@ -144,6 +144,12 @@ JSR only exposes a license for a version if the package declared one in its `den
 
 npm, JSR and the limited Cargo declaration lookup above are covered today. Python (PyPI) and Go are planned. Providers share rendering, caching and scheduling, and link Hover titles to their own registries. See [CONTRIBUTING.md](CONTRIBUTING.md) for the architecture and contribution workflow.
 
+## Contributors
+
+<a href="https://github.com/otnc/package-license-viewer/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=otnc/package-license-viewer" />
+</a>
+
 ## Author
 
 otoneko. https://github.com/otnc
