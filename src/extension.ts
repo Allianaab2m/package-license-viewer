@@ -50,6 +50,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (
         event.affectsConfiguration(`${CONFIG_SECTION}.npm`) ||
         event.affectsConfiguration(`${CONFIG_SECTION}.jsr`) ||
+        event.affectsConfiguration(`${CONFIG_SECTION}.crates`) ||
         event.affectsConfiguration(`${CONFIG_SECTION}.cacheTtlHours`)
       ) {
         annotator.invalidate();

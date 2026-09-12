@@ -1,0 +1,6 @@
+{
+  "packageLicenseViewer.crates.useRegistry": false,
+  "files.associations": {
+    "Cargo.toml": "plaintext"
+  }
+}

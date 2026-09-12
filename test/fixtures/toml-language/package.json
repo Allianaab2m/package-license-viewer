@@ -1,0 +1,9 @@
+{
+  "name": "plv-test-toml-language",
+  "publisher": "plv-tests",
+  "version": "0.0.0",
+  "engines": { "vscode": "^1.90.0" },
+  "contributes": {
+    "languages": [{ "id": "toml", "extensions": [".toml"] }]
+  }
+}

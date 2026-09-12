@@ -40,7 +40,11 @@ interface StoredResult {
 export class Annotator implements vscode.Disposable {
   private decorationTypes: AnnotationDecorationTypes;
   private readonly results = new Map<string, StoredResult>();
-  private readonly inflight = new Map<string, Promise<LicenseInfo>>();
+  private generation = 0;
+  private readonly inflight = new Map<
+    string,
+    { promise: Promise<LicenseInfo>; token: vscode.CancellationToken }
+  >();
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
   private readonly cancellations = new Map<string, vscode.CancellationTokenSource>();
   private readonly disposables: vscode.Disposable[] = [];
@@ -80,6 +84,9 @@ export class Annotator implements vscode.Disposable {
 
   /** Throw away resolved results so the next pass fetches them again */
   invalidate(): void {
+    this.generation++;
+    for (const key of this.cancellations.keys()) this.cancel(key);
+    this.inflight.clear();
     this.results.clear();
     for (const provider of this.providers) {
       (provider as { invalidate?: () => void }).invalidate?.();
@@ -119,6 +126,7 @@ export class Annotator implements vscode.Disposable {
     const config = getConfig(document);
     const provider = config.enabled ? findProvider(this.providers, document) : undefined;
     if (!provider) {
+      this.cancel(key);
       this.setDecorations(editors, emptyAnnotationOptions());
       return;
     }
@@ -196,9 +204,20 @@ export class Annotator implements vscode.Disposable {
     const key = this.keyOf(provider, entry);
     const existing = this.inflight.get(key);
     if (existing) {
-      return existing;
+      const info = await existing.promise;
+      // A live update must take over failed work owned by a cancelled update.
+      // Successful answers and ordinary failures remain shared, without retries.
+      if (
+        info.source === "unknown" &&
+        existing.token.isCancellationRequested &&
+        !token.isCancellationRequested
+      ) {
+        return this.resolveEntry(provider, entry, document, token);
+      }
+      return info;
     }
 
+    const generation = this.generation;
     const promise = provider
       .resolve(entry, document, token)
       .catch((error): LicenseInfo => {
@@ -208,16 +227,17 @@ export class Annotator implements vscode.Disposable {
       .then((info) => {
         // Never throw away a good answer. This promise is shared, so the token belongs to whichever update asked first — and that update may since have been superseded and cancelled while a newer one was already waiting on the very same promise. Only a cancelled *failure* is discarded, so that it gets retried instead of being remembered as "unknown" for the whole TTL.
         const cancelledFailure = info.source === "unknown" && token.isCancellationRequested;
-        if (!cancelledFailure) {
+        if (generation === this.generation && !cancelledFailure) {
           this.results.set(key, { at: Date.now(), info });
         }
         return info;
       })
       .finally(() => {
-        this.inflight.delete(key);
+        // An invalidated lookup must not remove its replacement.
+        if (this.inflight.get(key)?.promise === promise) this.inflight.delete(key);
       });
 
-    this.inflight.set(key, promise);
+    this.inflight.set(key, { promise, token });
     return promise;
   }
 

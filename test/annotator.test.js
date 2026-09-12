@@ -194,3 +194,92 @@ test("a provider that throws does not stop the other dependencies", async () => 
   );
   annotator.dispose();
 });
+
+test("shared lookups retry only cancelled failures for live waiters", async () => {
+  const { stub } = require("./vscode-stub");
+  for (const [source, cancelOwner, cancelWaiter, expected] of [
+    ["unknown", true, false, 2],
+    ["unknown", false, false, 1],
+    ["unknown", true, true, 1],
+    ["registry", true, false, 1],
+  ]) {
+    const provider = new SlowProvider(0);
+    const { annotator, document } = setup(provider);
+    const owner = new stub.CancellationTokenSource();
+    const waiter = new stub.CancellationTokenSource();
+    let finish;
+    provider.resolve = async () => {
+      provider.resolveCalls++;
+      if (provider.resolveCalls === 1)
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      return { source: "registry", license: "MIT" };
+    };
+    const entry = provider.parse(document)[0];
+    const first = annotator.resolveEntry(provider, entry, document, owner.token);
+    const second = annotator.resolveEntry(provider, entry, document, waiter.token);
+    const third = annotator.resolveEntry(provider, entry, document, waiter.token);
+    if (cancelOwner) owner.cancel();
+    if (cancelWaiter) waiter.cancel();
+    finish({ source, license: source === "registry" ? "MIT" : undefined });
+    await Promise.all([first, second, third]);
+    assert.equal(provider.resolveCalls, expected, `${source}/${cancelOwner}/${cancelWaiter}`);
+    annotator.dispose();
+  }
+});
+
+test("invalidated lookups cannot store stale successes or remove their replacements", async () => {
+  const { stub } = require("./vscode-stub");
+  const provider = new SlowProvider(0);
+  const { annotator, document } = setup(provider);
+  const finishes = [];
+  provider.resolve = () => new Promise((resolve) => finishes.push(resolve));
+  const entry = provider.parse(document)[0];
+  const token = new stub.CancellationTokenSource().token;
+  const old = annotator.resolveEntry(provider, entry, document, token);
+  annotator.invalidate();
+  const current = annotator.resolveEntry(provider, entry, document, token);
+  finishes[0]({ source: "registry", license: "stale" });
+  await old;
+  assert.equal(annotator.results.size, 0);
+  assert.equal(annotator.inflight.size, 1);
+  const shared = annotator.resolveEntry(provider, entry, document, token);
+  assert.equal(finishes.length, 2);
+  finishes[1]({ source: "registry", license: "MIT" });
+  await Promise.all([current, shared]);
+  assert.equal(annotator.inflight.size, 0);
+  assert.equal([...annotator.results.values()][0].info.license, "MIT");
+  annotator.dispose();
+});
+
+test("disabled annotations stay hidden when an earlier lookup completes", async (t) => {
+  const { stub } = require("./vscode-stub");
+  for (const disableProvider of [false, true]) {
+    let enabled = true,
+      finish;
+    t.mock.method(stub.workspace, "getConfiguration", () => ({
+      get: (key, fallback) => (key === "enabled" ? disableProvider || enabled : fallback),
+    }));
+    const provider = new SlowProvider(0);
+    provider.isEnabled = () => !disableProvider || enabled;
+    const pending = new Promise((resolve) => {
+      finish = resolve;
+    });
+    provider.resolve = () => pending;
+    const { annotator, document, editor } = setup(provider);
+    const first = annotator.update(document);
+    assert.ok(finish);
+    enabled = false;
+    await annotator.update(document);
+    assert.equal(editor.lastDecorations.length, 0);
+    // Providers may still finish successfully after cancellation.
+    finish({ source: "registry", license: "MIT" });
+    await first;
+    assert.equal(editor.lastDecorations.length, 0);
+    enabled = true;
+    await annotator.update(document);
+    assert.equal(editor.lastDecorations.length, DEPENDENCY_COUNT);
+    annotator.dispose();
+  }
+});

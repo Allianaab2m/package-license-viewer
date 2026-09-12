@@ -20,17 +20,25 @@ Everything a provider doesn't have to worry about is shared:
 
 The npm provider ([`src/providers/npm/`](src/providers/npm/)) resolves in three steps — `node_modules`, then the lockfile, then the registry — each in its own file ([`installed.ts`](src/providers/npm/installed.ts), [`lockfile/`](src/providers/npm/lockfile/), [`registry.ts`](src/providers/npm/registry.ts)). The JSR provider ([`src/providers/jsr/`](src/providers/jsr/)) reuses the npm registry client for `npm:` specifiers and routes `@jsr/scope__name` npm-compatibility names back to JSR.
 
+### Cargo implementation
+
+Cargo's implementation lives in [`src/providers/crates/`](src/providers/crates/). `parse.ts` uses the position-aware MIT-licensed `toml-eslint-parser` 0.10.0 (CommonJS, Node >=16 supported); keep the extension's minimum VS Code version when changing this dependency. TOML 1.0 declarations use their first line, or the dependency table header, as the annotation position. Invalid TOML yields no entries. Cargo requirements are interpreted independently of npm ranges; the saved Rust `semver::VersionReq` oracle and generated Cargo.lock fixture are described in [`cargo-provenance.md`](test/fixtures/lockfiles/cargo-provenance.md).
+
+`workspace.ts` and `lockfile.ts` only locate declarations and uniquely matching public versions. `client.ts` shares a send-start limiter (one request per second) across clients and uses `fetchJson` for HTTP. Its `/versions` request deliberately omits `per_page`: the [API implementation](https://github.com/rust-lang/crates.io/blob/main/src/controllers/krate/versions.rs) returns all versions in this mode. A response advertising another page is rejected instead of being treated as complete. The version records carry `license`, so candidate selection needs no request for each individual version. Exact locked versions use the per-version endpoint, including yanked versions. Transient failures are never written to `LicenseCache`; HTTP 429 delays subsequent sends for at least one minute without automatic retries.
+
+Keep manifest resolution keys separate from public version metadata keys. The former include the URI, alias, section, source, requirement and workspace context; the latter share exact public metadata across documents. `invalidate()` clears auxiliary reads and cancels pending Cargo requests. No Cargo command, archive reader, source cache, filesystem watcher or dependency graph belongs here.
+
 ## Adding another ecosystem
 
-Implement `LicenseProvider` and register it — no other file needs to change.
+Implement `LicenseProvider`, register it, and connect its activation and settings.
 
 ```ts
-export class CratesLicenseProvider implements LicenseProvider {
-  readonly id = "crates";
-  supports(document) { return document.uri.path.endsWith("/Cargo.toml"); }
-  isEnabled() { return getSetting("crates.enabled", true); }
+export class ExampleLicenseProvider implements LicenseProvider {
+  readonly id = "example";
+  supports(document) { /* recognize the manifest */ }
+  isEnabled() { return getSetting("example.enabled", true); }
   parse(document) { /* → DependencyEntry[] (name, spec, section, line) */ }
-  cacheKey(entry) { return `crates:${entry.name}@${entry.spec}`; }
+  cacheKey(entry) { /* include document/source context when resolution depends on it */ }
   async resolve(entry, document, token) { /* → LicenseInfo */ }
 }
 ```
@@ -51,10 +59,9 @@ Every provider is expected to make the hover title clickable, the same way npm a
 
 If the registry also exposes a genuine, separately-declared homepage, put that in `homepage` as usual — `buildHover` already drops the `Homepage` line when it would just repeat the title link (as it does for JSR, which has no separate homepage of its own).
 
-Python, Rust and Go support are planned but not implemented yet — see [README.md](README.md#other-languages) for the current status. If you want to pick one up, these are the metadata endpoints most likely to be useful:
+Python and Go support are planned but not implemented yet — see [README.md](README.md#other-languages) for the current status. These metadata endpoints may be useful:
 
 - PyPI: `https://pypi.org/pypi/<name>/<version>/json` → `info.license` / `info.classifiers`
-- crates.io: `https://crates.io/api/v1/crates/<name>/<version>` → `version.license`
 - Go: `https://pkg.go.dev/<module>?tab=licenses` (no JSON API; needs the module proxy or scraping)
 
 ## Development
@@ -77,6 +84,8 @@ npm run package           # build a .vsix
 The lockfiles in [`test/fixtures/lockfiles/`](test/fixtures/lockfiles/) were produced by really running `npm`, `pnpm`, `yarn` (classic and berry) and `bun` against the same manifest, so the parsers are tested against the real thing rather than hand-written samples.
 
 `npm test` also loads the bundled `dist/extension.js`, because bundling can break the extension on its own: a dependency whose entry point defers its `require()` calls to runtime resolves fine under `tsc` and then fails inside the extension host.
+
+Compile before unit tests to exercise the bundle rather than skip that check. Cargo's integration suite launches a separate Cargo-only workspace with TOML associated to plaintext. It checks automatic activation before opening a document or calling any extension command, then tests URI-based workspace/lockfile reads, cached metadata, Hover links, unsaved parsing and settings. Registry access is disabled in this fixture. To exercise the minimum host, set `PLV_VSCODE_VERSION=1.90.0` when running `npm run test:integration`; otherwise the current stable host is used.
 
 Run `npm run format` before committing; CI enforces `format:check` and `lint`.
 
