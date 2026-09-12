@@ -155,6 +155,7 @@ export class CratesClient {
         : undefined;
       if (cached) return { kind: "found", metadata: cached };
       let selected: CrateVersion | undefined;
+      let fetched = false;
       if (locked) {
         if (!getSetting("crates.useRegistry", true))
           return { kind: "unknown", reason: "registry disabled; Cargo.lock carries no license" };
@@ -164,6 +165,7 @@ export class CratesClient {
         );
         selected = decodeVersion(record(json) ? json.version : undefined, name);
         if (selected.version !== locked) throw new Error("crates.io returned a different version");
+        fetched = true;
       } else {
         let versions = this.cache.get<CrateVersion[]>(listKey);
         if (!versions) {
@@ -181,6 +183,7 @@ export class CratesClient {
           )
             throw new Error("incomplete crates.io version list");
           versions = json.versions.map((v) => decodeVersion(v, name));
+          fetched = true;
           checkCancelled(token);
           if (epoch === this.epoch) this.cache.set(listKey, versions);
         }
@@ -190,7 +193,8 @@ export class CratesClient {
       }
       checkCancelled(token);
       if (!selected) return { kind: "unknown", reason: "no matching non-yanked public version" };
-      if (epoch === this.epoch) this.cache.set(key(selected.version), selected);
+      // Reusing a cached list must not renew an exact version's metadata lifetime.
+      if (fetched && epoch === this.epoch) this.cache.set(key(selected.version), selected);
       return { kind: "found", metadata: selected };
     } catch (error) {
       return {

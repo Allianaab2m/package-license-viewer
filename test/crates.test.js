@@ -845,3 +845,41 @@ test("root patches recognize trailing index slashes without suppressing other so
     assert.equal(calls.at(-1), "other");
   }
 });
+
+test("range cache reuse preserves the original metadata expiry online and offline", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() });
+  let online = false;
+  t.mock.method(stub.workspace, "getConfiguration", () => ({
+    get: (key, fallback) => (key === "crates.useRegistry" ? online : fallback),
+  }));
+  const http = t.mock.method(global, "fetch", async () => {
+    throw new Error("unexpected HTTP");
+  });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const client = new CratesClient(cache);
+  const metadata = { version: "1.0.0", license: "MIT", yanked: false };
+  for (const seedExact of [false, true]) {
+    cache.clear();
+    cache.set("crates:versions:v1:real", [metadata]);
+    if (seedExact) cache.set("crates:metadata:v1:real@1.0.0", metadata);
+    t.mock.timers.tick(167 * 3600000);
+    for (online of [false, true]) {
+      assert.equal(
+        (await client.metadata("real", parseRequirement("1"), undefined, noCancel)).kind,
+        "found"
+      );
+    }
+    online = false;
+    assert.equal(
+      (await client.metadata("real", parseRequirement("1"), "1.0.0", noCancel)).kind,
+      "found"
+    );
+    t.mock.timers.tick(2 * 3600000);
+    assert.equal(
+      (await client.metadata("real", parseRequirement("1"), "1.0.0", noCancel)).kind,
+      "unknown"
+    );
+  }
+  assert.equal(http.mock.callCount(), 0);
+});
