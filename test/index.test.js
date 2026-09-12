@@ -727,6 +727,20 @@ test("buildHover falls back to just the name when no version resolved", () => {
   assert.doesNotMatch(hover.value, /@/);
 });
 
+test("buildHover still shows the lookup path on the Resolved from line when the source is unknown", () => {
+  // A provider can know *how* it looked something up even when the lookup itself failed
+  // (e.g. Cargo.lock pinned a version but the registry has no license for it) — that path
+  // shouldn't be silently dropped just because resolution didn't succeed.
+  const hover = buildHover(ENTRY, {
+    source: "unknown",
+    version: "1.0.0",
+    via: "Cargo.lock + crates.io",
+    detail: "no license field",
+  });
+  assert.match(hover.value, /Resolved from: Cargo\.lock \+ crates\.io/);
+  assert.match(hover.value, /License: _unknown_ — no license field/);
+});
+
 test("buildHover links the title to npmjs.org when registryPackageName is set", () => {
   const hover = buildHover(ENTRY, {
     license: "MIT",

@@ -145,6 +145,9 @@ function describeSource(info: LicenseInfo): string {
     case "skipped":
       return info.detail ?? "not applicable";
     default:
-      return info.detail ?? "not resolved";
+      // A provider can know *how* it looked something up (via) even when the lookup itself
+      // failed (e.g. Cargo.lock pinned a version but crates.io has no license for it) — the
+      // failure reason itself is already shown on the License line above, so prefer via here.
+      return info.via ?? info.detail ?? "not resolved";
   }
 }
