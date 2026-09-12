@@ -12,3 +12,5 @@ dist/
 
 # The integration fixture ships a hand-written node_modules on purpose
 !test/fixtures/workspace/node_modules/
+
+.private/
