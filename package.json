@@ -183,7 +183,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "build-tests": "tsc",
-    "test": "npm run build-tests && node --test test/index.test.js test/annotator.test.js",
+    "test": "npm run build-tests && node --test test/index.test.js test/annotator.test.js test/crates.test.js",
     "test:integration": "npm run compile && npm run build-tests && vscode-test",
     "package": "vsce package",
     "publish": "node scripts/publish.mjs",
@@ -192,7 +192,8 @@
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1",
-    "semver": "^7.6.3"
+    "semver": "^7.6.3",
+    "toml-eslint-parser": "0.10.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
