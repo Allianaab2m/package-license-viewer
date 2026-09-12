@@ -8,6 +8,7 @@ out/**
 node_modules/**
 .gitignore
 .github/**
+.private/**
 esbuild.js
 tsconfig.json
 test/**
