@@ -809,3 +809,39 @@ test("Windows UNC variants stop before any workspace file read", async (t) => {
   );
   assert.equal(workspaceManifestUri(stub.Uri.file("/app"), "/\\name")?.path, "/\\name/Cargo.toml");
 });
+
+test("root patches recognize trailing index slashes without suppressing other sources", async (t) => {
+  t.mock.method(stub.workspace.fs, "readFile", async () => {
+    throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+  });
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const calls = [];
+  t.mock.method(CratesClient.prototype, "metadata", async (name) => {
+    calls.push(name);
+    return { kind: "unknown", reason: "mock lookup" };
+  });
+  for (const [source, excluded] of [
+    ["crates-io", true],
+    ["https://github.com/rust-lang/crates.io-index", true],
+    ["https://github.com/rust-lang/crates.io-index/", true],
+    ["https://private.example/index/", false],
+    ["https://github.com/rust-lang/crates.io-index/other", false],
+  ]) {
+    calls.length = 0;
+    const document = fakeDocument(
+      `[workspace]\n[dependencies]\nreal="1"\nother="1"\n[patch."${source}"]\nalias={package="real",path="local"}`,
+      "/patch/Cargo.toml"
+    );
+    const provider = new CratesLicenseProvider(cache);
+    const [entry, other] = provider.parse(document);
+    assert.equal(
+      (await provider.resolve(entry, document, noCancel)).source,
+      excluded ? "skipped" : "unknown",
+      source
+    );
+    assert.deepEqual(calls, excluded ? [] : ["real"]);
+    await provider.resolve(other, document, noCancel);
+    assert.equal(calls.at(-1), "other");
+  }
+});

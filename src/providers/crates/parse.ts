@@ -93,8 +93,13 @@ export function parseManifest(text: string, manifestUri: string): CargoManifest 
     const workspacePath = typeof pkg.workspace === "string" ? pkg.workspace : undefined;
     const overrides: string[] = [];
     if (record(data.patch)) {
-      for (const source of ["crates-io", "https://github.com/rust-lang/crates.io-index"]) {
-        const patches = data.patch[source];
+      for (const [source, patches] of Object.entries(data.patch)) {
+        // Cargo treats trailing slashes on the registry index URL as equivalent.
+        if (
+          source !== "crates-io" &&
+          source.replace(/\/+$/, "") !== "https://github.com/rust-lang/crates.io-index"
+        )
+          continue;
         if (record(patches)) {
           for (const [alias, patch] of Object.entries(patches)) {
             overrides.push(
