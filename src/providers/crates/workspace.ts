@@ -56,6 +56,7 @@ export class CargoWorkspace {
         : { kind: "unknown", reason: "explicit workspace root could not be read" };
     }
     let dir = vscode.Uri.joinPath(directory, "..");
+    if (dir.path === directory.path) return { kind: "found", uri, manifest: current };
     for (let depth = 0; depth < 64 && dir.path !== directory.path; depth++) {
       const target = vscode.Uri.joinPath(dir, "Cargo.toml");
       const read = await this.read(target);
@@ -68,9 +69,9 @@ export class CargoWorkspace {
         if (manifest.workspace) return { kind: "found", uri: target, manifest };
       }
       const parent = vscode.Uri.joinPath(dir, "..");
-      if (parent.path === dir.path) break;
+      if (parent.path === dir.path) return { kind: "found", uri, manifest: current };
       dir = parent;
     }
-    return { kind: "found", uri, manifest: current };
+    return { kind: "unknown", reason: "workspace ancestor search limit reached" };
   }
 }

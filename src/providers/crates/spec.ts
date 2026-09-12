@@ -14,7 +14,7 @@ const versionPattern = new RegExp(
 
 function version(value: string, partial: boolean): Version | undefined {
   const match = versionPattern.exec(value);
-  if (!match) return undefined;
+  if (!match || match[0] !== value) return undefined;
   const parts = match
     .slice(1, 4)
     .filter((x) => x !== undefined)

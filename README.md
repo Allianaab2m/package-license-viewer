@@ -34,12 +34,18 @@ When a package declares an `engines.node` range, it's appended to the annotation
 | `package.json` | `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`, and any other `*Dependencies` section |
 | `deno.json`, `deno.jsonc`, `jsr.json`, `import_map.json` | `imports` — both `jsr:` and `npm:` specifiers |
 | `pnpm-workspace.yaml` | `catalog:` and `catalogs:` — the actual ranges a workspace catalog resolves to |
+| `Cargo.toml` | `dependencies`, `dev-dependencies`, `build-dependencies`, their target-specific forms, and `workspace.dependencies` |
 
 ## How a license is resolved
+
+For ordinary npm dependencies in `package.json` and pnpm catalogs:
 
 1. **The installed package, first.** `node_modules/<name>/package.json`, walking up parent directories. Instant, works offline, and reflects the version that is actually installed.
 2. **The lockfile.** Gives the exact pinned version even when nothing is installed yet. `package-lock.json` carries the license itself, so npm projects can resolve with **no network access at all**.
 3. **The registry.** `registry.npmjs.org` for npm, `jsr.io` for JSR. Results are cached on disk for a week.
+
+Deno/JSR use registry metadata directly. Cargo has its own limited lookup path,
+described below; it does not read `node_modules` or installed Cargo sources.
 
 Specifiers that cannot be resolved — `file:`, `link:`, `workspace:`, `git+…`, `user/repo`, tarball URLs, `https://` imports — are left un-annotated rather than marked unknown. A pnpm workspace catalog reference (`catalog:`, `catalog:<name>`) has no version of its own in `package.json` to resolve against the registry, but `pnpm-lock.yaml` records what it resolved to, so it works wherever the lockfile is readable — and `pnpm-workspace.yaml` itself is annotated too, so the actual range behind a catalog entry is visible right where it's declared. `npm:` aliases are followed to their target. JSR packages inside `package.json` are recognized either way they show up — the npm-compatibility alias `@jsr/scope__name`, or the native `jsr:<range>` / `jsr:@scope/name@<range>` specifier pnpm ≥10.9 and Yarn ≥4.9 write directly — and routed to JSR automatically, since the npm-compatibility registry never publishes a license for them, installed or not.
 
@@ -66,7 +72,7 @@ Lockfile formats understood: `package-lock.json` (v1/v2/v3, including workspaces
 
 | Command | Description |
 | --- | --- |
-| `Package License Viewer: Refresh License Annotations` | Re-read `node_modules` and lockfiles, then redraw. Use after `npm install`. |
+| `Package License Viewer: Refresh License Annotations` | Re-read local metadata, lockfiles and Cargo workspace declarations, then redraw. Use after dependency changes. |
 | `Package License Viewer: Clear License Cache` | Drop everything cached from the registries. |
 | `Package License Viewer: Toggle Inline License Annotations` | Turn the annotations on or off. |
 
@@ -95,6 +101,82 @@ Lockfile formats understood: `package-lock.json` (v1/v2/v3, including workspaces
 | `packageLicenseViewer.jsr.enabled` | `true` | Enable annotations for Deno / import map manifests. |
 | `packageLicenseViewer.jsr.registry` | `https://jsr.io` | JSR registry base URL. |
 | `packageLicenseViewer.jsr.apiUrl` | `https://api.jsr.io` | JSR API base URL, where the license lives. |
+| `packageLicenseViewer.crates.enabled` | `true` | Annotate dependency declarations in `Cargo.toml`. |
+| `packageLicenseViewer.crates.useRegistry` | `true` | Allow crates.io requests. When disabled, existing cached public metadata can still be used. |
+| `packageLicenseViewer.crates.useLockfiles` | `true` | Prefer a uniquely matching crates.io version in the applicable `Cargo.lock`. |
+
+### Cargo license annotations
+
+```toml
+[dependencies]
+serde = { version = "1", optional = true } # MIT OR Apache-2.0
+json = { package = "serde_json", version = "1" }
+[dev-dependencies]
+tempfile = "3"
+```
+
+Comments above illustrate annotations, not changes the extension writes to files.
+The provider reads dependency declarations, including optional and target-specific
+declarations regardless of whether they are enabled. Strings, inline tables,
+dedicated dependency tables, dotted keys and quoted keys are supported using
+TOML 1.0. An annotation uses the first line of the declaration, or its dedicated
+table header. Invalid TOML produces no annotations until it is corrected.
+
+`package` aliases are followed to the real crate name. `[workspace.dependencies]`
+is annotated directly; `workspace = true` inherits the corresponding alias from
+an explicit `package.workspace` root or the nearest ancestor `[workspace]`.
+Virtual and nested roots are supported. This is a limited declaration lookup:
+members are not enumerated and workspace membership is not fully validated.
+An unreadable or conflicting reference is unknown, not guessed.
+
+The lookup path is:
+
+1. Look in the root's `Cargo.lock` (or beside a standalone manifest) for a unique
+   version matching the real name, crates.io source and Cargo version requirement.
+2. If one is found, request metadata for that exact version, even if yanked.
+   Missing license metadata stays unknown for that version.
+3. Otherwise choose the highest non-yanked public version satisfying the Cargo
+   requirement, including Cargo's prerelease rules. A bare `"1.2.3"` is a caret
+   requirement; only `"=1.2.3"` requires that exact version.
+
+Hover links point to the real crate and selected version on crates.io. The `via`
+description distinguishes `Cargo.lock + crates.io` from `manifest requirement +
+crates.io`. Both obtain license strings from public registry metadata; **Cargo.lock
+does not contain licenses**. Cached version metadata is shared across projects,
+but manifest resolution results are separated by document and dependency source.
+Requests follow the [crates.io Data Access Policy](https://crates.io/data-access):
+at most one request per second per extension host, with an identifying User-Agent.
+An HTTP 429 delays subsequent requests for at least one minute without an automatic
+retry loop. Offline mode permits cached metadata; Clear License Cache removes it.
+
+Path, git and explicitly named registry dependencies are skipped, even if they
+also specify a version. Their names are not sent to crates.io. Recognized root
+`patch`/`replace` entries suppress the affected packages conservatively, including
+renamed patches, without hiding unrelated dependencies. Member patches are ignored
+when a workspace root is found. `.cargo/config.toml`, source replacement settings
+and other Cargo configuration are not interpreted.
+
+No Cargo or Rust installation is required. The extension never runs Cargo commands,
+downloads `.crate` archives, searches the local Cargo source cache, or reads license
+files. It does not resolve dependency graphs, evaluate features/targets, list
+transitive dependencies, inspect MSRV or audit licenses. A missing license string
+means metadata is unavailable, not that use is prohibited. Existing `unknownText`
+and formatting settings apply; intentionally skipped dependencies remain hidden.
+**The displayed version is a metadata lookup target, not a guarantee of the version
+used by an actual build under every Cargo configuration.**
+
+Editing/saving the document, switching editors or Refresh triggers updates.
+Auxiliary file reads are cached for five seconds and annotation results for one
+minute; expiration alone does not trigger an update. After an external change to
+Cargo.lock or a workspace manifest, use Refresh for immediate re-evaluation, or
+wait for these caches to expire and trigger another editor update. Clear Cache
+also invalidates auxiliary reads. Cargo setting changes invalidate annotations.
+
+Opening a workspace containing `Cargo.toml` activates the extension even if TOML
+files are treated as plain text. Opening a standalone file without such a workspace
+requires a TOML language registration (or running the Refresh command). The
+extension contributes no TOML grammar or language server. VS Code 1.90 remains
+the minimum supported version.
 
 ### A note on JSR licenses
 
@@ -104,7 +186,7 @@ JSR only exposes a license for a version if the package declared one in its `den
 
 ## Other languages
 
-npm and JSR are covered today. Python (PyPI), Rust (crates.io) and Go are planned — the extension is built around a provider interface specifically so an ecosystem is one class away, without touching rendering, caching or scheduling. Every ecosystem is expected to link the hover title to its own registry page too, the same way npm and JSR already do. See [CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to add one, or just want to see how it's structured.
+npm, JSR and the limited Cargo declaration lookup above are covered today. Python (PyPI) and Go are planned. Providers share rendering, caching and scheduling, and link Hover titles to their own registries. See [CONTRIBUTING.md](CONTRIBUTING.md) for the architecture and contribution workflow.
 
 ## Author
 

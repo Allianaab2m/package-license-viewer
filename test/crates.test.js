@@ -348,6 +348,10 @@ test("Cargo explicit workspace roots and separate lockfiles use distinct public 
     ]
   );
   assert.notEqual(provider.cacheKey(provider.parse(a)[0]), provider.cacheKey(provider.parse(b)[0]));
+  const deep = fakeDocument('[dependencies]\nreal="1"', "/" + "nested/".repeat(70) + "Cargo.toml");
+  const unresolved = await provider.resolve(provider.parse(deep)[0], deep, noCancel);
+  assert.equal(unresolved.source, "unknown");
+  assert.match(unresolved.detail, /search limit/);
 });
 
 test("Cargo resolution integrates with Annotator Refresh and independent manifests", async (t) => {
@@ -379,6 +383,101 @@ test("Cargo resolution integrates with Annotator Refresh and independent manifes
   await new Promise((r) => setTimeout(r, 350));
   assert.equal(editor.lastDecorations.length, 0);
 });
+
+test("extension Refresh, Clear Cache and each Cargo setting invalidate the provider", async (t) => {
+  const commands = new Map();
+  const previous = stub.commands;
+  stub.commands = {
+    registerCommand(name, callback) {
+      commands.set(name, callback);
+      return { dispose() {} };
+    },
+  };
+  const { activate } = require("../out/extension");
+  t.after(() => {
+    stub.commands = previous;
+  });
+  stub.window.showInformationMessage = async () => {};
+  t.after(() => {
+    delete stub.window.showInformationMessage;
+  });
+  let changed;
+  t.mock.method(stub.workspace, "onDidChangeConfiguration", (callback) => {
+    changed = callback;
+    return { dispose() {} };
+  });
+  const invalidated = t.mock.method(CratesLicenseProvider.prototype, "invalidate");
+  const cleared = t.mock.method(LicenseCache.prototype, "clear");
+  const context = { globalState: { get() {}, async update() {} }, subscriptions: [] };
+  setVisibleEditors([]);
+  activate(context);
+  t.after(() => context.subscriptions.forEach((s) => s.dispose()));
+  commands.get("packageLicenseViewer.refresh")();
+  await commands.get("packageLicenseViewer.clearCache")();
+  assert.equal(cleared.mock.callCount(), 1);
+  for (const key of ["enabled", "useRegistry", "useLockfiles"]) {
+    const full = `packageLicenseViewer.crates.${key}`;
+    changed({
+      affectsConfiguration: (section) => full === section || full.startsWith(section + "."),
+    });
+  }
+  assert.equal(invalidated.mock.callCount(), 5);
+});
+
+test(
+  "the production-capable bundle parses Cargo and renders a cached license",
+  {
+    skip: !fs.existsSync(path.join(__dirname, "../dist/extension.js")),
+  },
+  async (t) => {
+    const previous = stub.commands;
+    stub.commands = {
+      registerCommand() {
+        return { dispose() {} };
+      },
+    };
+    t.after(() => {
+      stub.commands = previous;
+    });
+    t.mock.method(stub.workspace.fs, "readFile", async () => {
+      throw Object.assign(new Error("missing"), { code: "FileNotFound" });
+    });
+    t.mock.method(stub.workspace, "getConfiguration", () => ({
+      get: (key, fallback) => (key === "crates.useRegistry" ? false : fallback),
+    }));
+    const editor = fakeEditor(
+      fakeDocument('[dependencies]\nalias={package="real",version="1"}', "/bundle/Cargo.toml")
+    );
+    setVisibleEditors([editor]);
+    const context = {
+      subscriptions: [],
+      globalState: {
+        get() {
+          return {
+            "crates:versions:v1:real": {
+              t: Date.now(),
+              v: [{ version: "1.0.0", license: "MIT", yanked: false }],
+            },
+          };
+        },
+        async update() {},
+      },
+    };
+    t.after(() => {
+      context.subscriptions.forEach((s) => s.dispose());
+      setVisibleEditors([]);
+    });
+    require("../dist/extension.js").activate(context);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.ok(
+      editor.lastDecorations.some((d) => d.renderOptions.after.contentText.includes("MIT"))
+    );
+    assert.match(
+      editor.lastDecorations.find((d) => d.hoverMessage)?.hoverMessage.value ?? "",
+      /crates.io\/crates\/real\/1.0.0/
+    );
+  }
+);
 
 test("Cargo TOML forms preserve aliases, sections and declaration start lines", () => {
   const text = `[dependencies]
@@ -487,6 +586,8 @@ test("Cargo requirement semantics differ from npm and match Rust VersionReq", ()
     "*,1",
     "1,",
     "1\t",
+    "1\n",
+    "1\r\n",
     "18446744073709551616",
   ])
     assert.equal(parseRequirement(req).kind, "invalid", req);

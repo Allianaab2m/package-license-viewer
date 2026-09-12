@@ -1,7 +1,7 @@
 {
   "name": "package-license-viewer",
   "displayName": "Package License Viewer",
-  "description": "Shows the license of each dependency inline, dimmed at the end of the line in package.json and deno.json.",
+  "description": "Shows dependency license metadata inline in package.json, deno.json and Cargo.toml.",
   "version": "0.3.1",
   "publisher": "otoneko1102",
   "license": "MIT",
@@ -22,7 +22,9 @@
     "bun",
     "jsr",
     "deno",
-    "spdx"
+    "spdx",
+    "cargo",
+    "crates.io"
   ],
   "icon": "images/icon.png",
   "repository": {
@@ -36,7 +38,9 @@
   "activationEvents": [
     "onLanguage:json",
     "onLanguage:jsonc",
-    "onLanguage:yaml"
+    "onLanguage:yaml",
+    "onLanguage:toml",
+    "workspaceContains:**/Cargo.toml"
   ],
   "contributes": {
     "commands": [
@@ -172,6 +176,21 @@
           "type": "string",
           "default": "https://api.jsr.io",
           "description": "JSR API base URL, used to read the license of a resolved version."
+        },
+        "packageLicenseViewer.crates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable license annotations for Cargo.toml dependency declarations."
+        },
+        "packageLicenseViewer.crates.useRegistry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow crates.io requests. When disabled, existing cached public metadata may still be used."
+        },
+        "packageLicenseViewer.crates.useLockfiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use a uniquely matching crates.io version from Cargo.lock before selecting a public version from the requirement."
         }
       }
     }

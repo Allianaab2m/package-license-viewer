@@ -1,0 +1,7 @@
+[package]
+name = "cargo-annotations-fixture"
+version = "0.1.0"
+
+[dependencies]
+alias.workspace = true
+private = { path = "../private", version = "1" }

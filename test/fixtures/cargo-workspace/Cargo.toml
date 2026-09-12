@@ -1,0 +1,5 @@
+[workspace]
+members = ["member"]
+
+[workspace.dependencies]
+alias = { package = "semver", version = "1" }

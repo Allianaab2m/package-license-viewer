@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { LicenseCache } from "../cache";
+import { CratesLicenseProvider } from "./crates";
 import { JsrLicenseProvider } from "./jsr";
 import { NpmLicenseProvider } from "./npm";
 import type { LicenseProvider } from "./types";
@@ -11,11 +12,14 @@ export * from "./types";
 
  * To support another ecosystem, implement `LicenseProvider` and add it to this array — no other file needs to change. For example:
  *   new PypiLicenseProvider(cache)   // requirements.txt / pyproject.toml
- *   new CratesLicenseProvider(cache) // Cargo.toml
  * Remember to add the language to `activationEvents` in package.json as well.
  */
 export function createProviders(cache: LicenseCache): LicenseProvider[] {
-  return [new NpmLicenseProvider(cache), new JsrLicenseProvider(cache)];
+  return [
+    new NpmLicenseProvider(cache),
+    new JsrLicenseProvider(cache),
+    new CratesLicenseProvider(cache),
+  ];
 }
 
 /** The first provider that can handle this document, if any */
