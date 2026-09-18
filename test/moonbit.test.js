@@ -293,6 +293,51 @@ test("MoonBit resolution prefers .mooncakes, then moon.work, then the index, the
   );
 });
 
+test("what is on disk answers before the declared version is judged", async (t) => {
+  const files = new Map([
+    ["/repo/moon.work", 'members = ["./member", "./other"]'],
+    ["/repo/other/moon.mod", 'name = "plv/other"\nversion = "0.2.0"\nlicense = "MIT"'],
+    [
+      "/repo/member/.mooncakes/plv/unpacked/moon.mod.json",
+      '{"name":"plv/unpacked","version":"0.9.1","license":"Apache-2.0"}',
+    ],
+  ]);
+  const calls = mount(t, files);
+  const cache = makeCache();
+  t.after(() => cache.dispose());
+  const provider = new MoonbitLicenseProvider(cache);
+
+  const document = fakeDocument(
+    [
+      "{",
+      '  "deps": {',
+      '    "plv/unpacked": "^0.5.0",',
+      '    "plv/other": "workspace",',
+      '    "plv/remote": "^2.0.0"',
+      "  }",
+      "}",
+    ].join("\n"),
+    "/repo/member/moon.mod.json"
+  );
+  const infos = [];
+  for (const entry of provider.parse(document)) {
+    infos.push(await provider.resolve(entry, document, noCancel));
+  }
+
+  assert.deepEqual(
+    infos.map((info) => [info.source, info.license ?? info.detail]),
+    [
+      // What moon unpacked, and a member moon builds from the repository, both stand
+      // whatever the manifest wrote next to them
+      ["local", "Apache-2.0"],
+      ["skipped", "built from a `moon.work` member"],
+      // Only the module nothing on disk knew about is judged on its declaration
+      ["unknown", "invalid version"],
+    ]
+  );
+  assert.deepEqual(calls, []);
+});
+
 test("declarations that mooncakes.io cannot answer for never reach it", async (t) => {
   const calls = mount(t, new Map());
   const cache = makeCache();

@@ -75,9 +75,6 @@ export class MoonbitLicenseProvider implements LicenseProvider {
     if (!isModuleName(entry.name)) {
       return { source: "unknown", detail: "invalid module name" };
     }
-    if (declaration.version !== undefined && !isModuleVersion(declaration.version)) {
-      return { source: "unknown", detail: "invalid version" };
-    }
 
     const installed = await this.lookup.find(document.uri, entry.name);
     if (installed?.version) {
@@ -86,6 +83,13 @@ export class MoonbitLicenseProvider implements LicenseProvider {
 
     if (await this.lookup.isWorkspaceMember(document.uri, entry.name)) {
       return { source: "skipped", detail: "built from a `moon.work` member" };
+    }
+
+    // Only the lookups below read the declared version, so it is checked here rather
+    // than up front: what is on disk answers first, and a moon.work member's `@version`
+    // is ignored by moon whatever it says.
+    if (declaration.version !== undefined && !isModuleVersion(declaration.version)) {
+      return { source: "unknown", detail: "invalid version" };
     }
 
     if (getSetting("moonbit.useRegistryIndex", true)) {
