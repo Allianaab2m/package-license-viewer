@@ -222,7 +222,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "build-tests": "tsc",
-    "test": "npm run build-tests && node --test test/index.test.js test/annotator.test.js test/crates.test.js",
+    "test": "npm run build-tests && node --test test/index.test.js test/annotator.test.js test/crates.test.js test/moonbit.test.js",
     "test:integration": "npm run compile && npm run build-tests && vscode-test",
     "package": "vsce package",
     "publish": "node scripts/publish.mjs",
